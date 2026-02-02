@@ -201,8 +201,7 @@ impl OptionsDialogState {
                 // Font size
                 ui.horizontal(|ui| {
                     ui.label(i18n.t("options.font_size"));
-                    let response = ui.add(egui::Slider::new(&mut self.font_size, 10.0..=30.0).step_by(1.0).show_value(false));
-                    ui.label(format!("{:.0}", self.font_size));
+                    let response = ui.add(egui::Slider::new(&mut self.font_size, 10.0..=30.0).step_by(1.0).show_value(true));
                     if response.changed() {
                         self.pending_changes = true;
                     }
@@ -213,8 +212,7 @@ impl OptionsDialogState {
                 // UI scale
                 ui.horizontal(|ui| {
                     ui.label(i18n.t("options.ui_scale"));
-                    let response = ui.add(egui::Slider::new(&mut self.ui_scale, 0.5..=2.0).step_by(0.1).show_value(false));
-                    ui.label(format!("x{:.1}", self.ui_scale));
+                    let response = ui.add(egui::Slider::new(&mut self.ui_scale, 0.5..=2.0).step_by(0.1).show_value(true));
                     if response.changed() {
                         self.pending_changes = true;
                     }
