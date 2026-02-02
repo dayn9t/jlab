@@ -81,6 +81,7 @@ impl Canvas {
         selected_vertex: Option<(i32, usize)>,
         temp_points: &[Point],
         edit_mode: crate::state::EditMode,
+        no_image_text: &str,
     ) -> CanvasResponse {
         let mut response = CanvasResponse::default();
 
@@ -443,7 +444,7 @@ impl Canvas {
             painter.text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
-                "No image loaded\nOpen a project to start annotating",
+                no_image_text,
                 egui::FontId::proportional(16.0),
                 Color32::GRAY,
             );

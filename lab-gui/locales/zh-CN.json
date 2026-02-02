@@ -106,6 +106,10 @@
     "cursor": "坐标",
     "hint": "提示"
   },
+  "canvas": {
+    "no_image_loaded": "未加载图像",
+    "open_project_hint": "打开一个项目开始标注"
+  },
   "hint": {
     "shortcut": "快捷键",
     "menu_file": "文件菜单：打开/保存/自动保存/导入/导出/关闭项目",
@@ -237,6 +241,7 @@
     "category_mode": "模式",
     "category_navigation": "导航",
     "category_view": "视图",
+    "category_tools": "工具",
     "category_other": "其他",
     "scope_global": "全局",
     "scope_normal": "浏览模式",
@@ -307,7 +312,8 @@
     "auto_save": "自动保存",
     "apply": "应用",
     "ok": "确定",
-    "cancel": "取消"
+    "cancel": "取消",
+    "restore_defaults": "恢复默认值"
   },
   "about": {
     "title": "关于 JLab",

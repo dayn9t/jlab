@@ -10,6 +10,7 @@ pub enum DialogButtonAction {
     Apply,
     Ok,
     Cancel,
+    RestoreDefaults,
 }
 
 /// Options dialog tabs
@@ -41,6 +42,8 @@ pub struct OptionsDialogState {
     pub ui_scale: f32,
     pub theme_color: ThemeColor,
     pub show_scrollbar: bool,
+    // Global search text
+    pub search_text: String,
 }
 
 impl OptionsDialogState {
@@ -54,8 +57,9 @@ impl OptionsDialogState {
             pending_changes: false,
             font_size: 16.0,
             ui_scale: 1.0,
-            theme_color: ThemeColor::System,
+            theme_color: ThemeColor::Dark,
             show_scrollbar: true,
+            search_text: String::new(),
         }
     }
 
@@ -65,14 +69,17 @@ impl OptionsDialogState {
         self.active_tab = OptionsTab::General;
         self.shortcut_editor = Some(ShortcutEditorState::new(current_config));
         self.pending_changes = false;
+        self.search_text.clear();
         // Settings will be refreshed from current state before showing
     }
 
     /// Refresh settings from current application state
-    pub fn refresh_from_state(&mut self, language: Language, auto_save: bool, theme: ThemeColor) {
+    pub fn refresh_from_state(&mut self, language: Language, auto_save: bool, theme: ThemeColor, font_size: f32, ui_scale: f32) {
         self.selected_language = language;
         self.auto_save_enabled = auto_save;
         self.theme_color = theme;
+        self.font_size = font_size;
+        self.ui_scale = ui_scale;
     }
 
     /// Render the options dialog
@@ -90,12 +97,17 @@ impl OptionsDialogState {
 
         egui::Window::new(i18n.t("options.title"))
             .open(&mut open)
-            .default_size([700.0, 450.0])
+            .default_size([700.0, 600.0])
             .resizable(true)
             .collapsible(false)
             .show(ctx, |ui| {
                 self.show_content(ui, i18n, &mut button_action);
             });
+
+        // Close dialog if OK or Cancel was clicked
+        if matches!(button_action, Some(DialogButtonAction::Ok) | Some(DialogButtonAction::Cancel)) {
+            self.show = false;
+        }
 
         if !open {
             self.show = false;
@@ -115,17 +127,15 @@ impl OptionsDialogState {
         ui.horizontal(|ui| {
             // Search bar on the left
             ui.label(i18n.t("options.search"));
-            let search_text = if let Some(ref mut editor) = self.shortcut_editor {
-                &mut editor.search_filter
-            } else {
-                &mut String::new()
-            };
-            ui.text_edit_singleline(search_text);
+            ui.text_edit_singleline(&mut self.search_text);
 
             // Use available width to push buttons to the right
-            ui.add_space(ui.available_width() - 120.0);
+            ui.add_space(ui.available_width() - 200.0);
 
-            // Buttons on the right (Apply, OK, Cancel)
+            // Buttons on the right (Restore Defaults, Apply, OK, Cancel)
+            if ui.button(i18n.t("options.restore_defaults")).clicked() {
+                *button_action = Some(DialogButtonAction::RestoreDefaults);
+            }
             if ui.button(i18n.t("options.apply")).clicked() {
                 *button_action = Some(DialogButtonAction::Apply);
             }
@@ -191,9 +201,9 @@ impl OptionsDialogState {
                 // Font size
                 ui.horizontal(|ui| {
                     ui.label(i18n.t("options.font_size"));
-                    ui.add(egui::Slider::new(&mut self.font_size, 10.0..=30.0).step_by(1.0));
+                    let response = ui.add(egui::Slider::new(&mut self.font_size, 10.0..=30.0).step_by(1.0).show_value(false));
                     ui.label(format!("{:.0}", self.font_size));
-                    if ui.response().changed() {
+                    if response.changed() {
                         self.pending_changes = true;
                     }
                 });
@@ -203,9 +213,9 @@ impl OptionsDialogState {
                 // UI scale
                 ui.horizontal(|ui| {
                     ui.label(i18n.t("options.ui_scale"));
-                    ui.add(egui::Slider::new(&mut self.ui_scale, 0.5..=2.0).step_by(0.1));
+                    let response = ui.add(egui::Slider::new(&mut self.ui_scale, 0.5..=2.0).step_by(0.1).show_value(false));
                     ui.label(format!("x{:.1}", self.ui_scale));
-                    if ui.response().changed() {
+                    if response.changed() {
                         self.pending_changes = true;
                     }
                 });
@@ -216,7 +226,7 @@ impl OptionsDialogState {
                 ui.horizontal(|ui| {
                     ui.label(i18n.t("options.theme_color"));
                     let theme_text = i18n.t(self.theme_color.name_key());
-                    egui::ComboBox::from_id_salt("options_theme")
+                    let response = egui::ComboBox::from_id_salt("options_theme")
                         .selected_text(theme_text)
                         .width(120.0)
                         .show_ui(ui, |ui| {
@@ -230,7 +240,7 @@ impl OptionsDialogState {
                                 self.theme_color = ThemeColor::System;
                             }
                         });
-                    if ui.response().changed() {
+                    if response.response.changed() {
                         self.pending_changes = true;
                     }
                 });
@@ -243,8 +253,8 @@ impl OptionsDialogState {
 
                 // Show scrollbar
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut self.show_scrollbar, i18n.t("options.show_scrollbar"));
-                    if ui.response().changed() {
+                    let response = ui.checkbox(&mut self.show_scrollbar, i18n.t("options.show_scrollbar"));
+                    if response.changed() {
                         self.pending_changes = true;
                     }
                 });
@@ -257,8 +267,8 @@ impl OptionsDialogState {
 
                 // Auto save
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut self.auto_save_enabled, i18n.t("options.auto_save"));
-                    if ui.response().changed() {
+                    let response = ui.checkbox(&mut self.auto_save_enabled, i18n.t("options.auto_save"));
+                    if response.changed() {
                         self.pending_changes = true;
                     }
                 });
@@ -266,18 +276,37 @@ impl OptionsDialogState {
     }
 
     fn show_shortcuts_tab(&mut self, ui: &mut egui::Ui, i18n: &crate::i18n::I18n) {
+        // Sync search text to shortcut editor
+        if let Some(ref mut editor) = self.shortcut_editor {
+            editor.search_filter = self.search_text.clone();
+        }
+
         if let Some(ref mut editor) = self.shortcut_editor {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 ui.add_space(10.0);
 
-                // Category filter for shortcuts
+                // Category filter for shortcuts - display as horizontal buttons
                 ui.horizontal(|ui| {
                     ui.label(i18n.t("options.category"));
-                    let category_filter = editor.category_filter;
-                    if ui.button(i18n.t("options.all_categories")).clicked() {
-                        // Toggle between all and none
+                    ui.label(":");
+
+                    // All categories button
+                    if ui.selectable_label(
+                        editor.category_filter.is_none(),
+                        i18n.t("shortcuts.all_categories"),
+                    ).clicked() {
+                        editor.category_filter = None;
                     }
-                    // Show category buttons here if needed
+
+                    // Individual category buttons
+                    for cat in crate::shortcuts::ShortcutCategory::all_categories() {
+                        if ui.selectable_label(
+                            editor.category_filter == Some(cat),
+                            i18n.t(cat.name_key()),
+                        ).clicked() {
+                            editor.category_filter = Some(cat);
+                        }
+                    }
                 });
 
                 ui.separator();
@@ -310,6 +339,26 @@ impl OptionsDialogState {
             theme_color: self.theme_color,
             show_scrollbar: self.show_scrollbar,
         }
+    }
+
+    /// Restore all settings to default values
+    pub fn restore_defaults(&mut self) {
+        self.selected_language = crate::i18n::Language::ZhCN;
+        self.auto_save_enabled = true;
+        self.font_size = 16.0;
+        self.ui_scale = 1.0;
+        self.theme_color = crate::state::ThemeColor::Dark;
+        self.show_scrollbar = true;
+        self.search_text.clear();
+        self.active_tab = OptionsTab::General;
+
+        // Restore shortcuts to defaults
+        if let Some(ref mut editor) = self.shortcut_editor {
+            editor.working_config = crate::shortcuts::ShortcutManager::new().get_config().clone();
+            editor.refresh_conflicts();
+        }
+
+        self.pending_changes = true;
     }
 }
 

@@ -148,6 +148,15 @@ pub struct AppState {
 
     /// Show right sidebar
     pub show_right_panel: bool,
+
+    /// Font size setting
+    pub font_size: f32,
+
+    /// UI scale setting
+    pub ui_scale: f32,
+
+    /// Show scrollbar setting
+    pub show_scrollbar: bool,
 }
 
 impl AppState {
@@ -168,7 +177,13 @@ impl AppState {
 
         // Try to load saved theme setting
         let saved_theme = Self::load_theme_setting();
-        let theme_color = saved_theme.unwrap_or(ThemeColor::System);
+        let theme_color = saved_theme.unwrap_or(ThemeColor::Dark);
+
+        // Try to load saved UI settings
+        let saved_ui_settings = Self::load_ui_settings();
+        let font_size = saved_ui_settings.0.unwrap_or(16.0);
+        let ui_scale = saved_ui_settings.1.unwrap_or(1.0);
+        let show_scrollbar = saved_ui_settings.2.unwrap_or(true);
 
         let mut state = Self {
             project: None,
@@ -199,6 +214,9 @@ impl AppState {
             theme_color,
             show_left_panel: true,
             show_right_panel: true,
+            font_size,
+            ui_scale,
+            show_scrollbar,
         };
         // Load recent projects from file
         let _ = state.load_recent_projects();
@@ -645,6 +663,69 @@ impl AppState {
 
         let config_path = config_dir.join("theme.json");
         let content = serde_json::to_string_pretty(&self.theme_color.as_str())?;
+        std::fs::write(&config_path, content)?;
+        Ok(())
+    }
+
+    /// Load UI settings from config file
+    fn load_ui_settings() -> (Option<f32>, Option<f32>, Option<bool>) {
+        let home = match std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+            Ok(h) => h,
+            Err(_) => return (None, None, None),
+        };
+        let config_path = PathBuf::from(home)
+            .join(".config")
+            .join("jlab")
+            .join("ui_settings.json");
+
+        if !config_path.exists() {
+            return (None, None, None);
+        }
+
+        let content = match std::fs::read_to_string(&config_path) {
+            Ok(c) => c,
+            Err(_) => return (None, None, None),
+        };
+
+        #[derive(Deserialize)]
+        struct UISettings {
+            font_size: Option<f32>,
+            ui_scale: Option<f32>,
+            show_scrollbar: Option<bool>,
+        }
+
+        let settings: UISettings = match serde_json::from_str(&content) {
+            Ok(s) => s,
+            Err(_) => return (None, None, None),
+        };
+
+        (settings.font_size, settings.ui_scale, settings.show_scrollbar)
+    }
+
+    /// Save UI settings to config file
+    pub fn save_ui_settings(&self) -> anyhow::Result<()> {
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .map_err(|_| anyhow::anyhow!("Cannot find home directory"))?;
+
+        let config_dir = PathBuf::from(home).join(".config").join("jlab");
+        std::fs::create_dir_all(&config_dir)?;
+
+        #[derive(Serialize)]
+        struct UISettings {
+            font_size: f32,
+            ui_scale: f32,
+            show_scrollbar: bool,
+        }
+
+        let settings = UISettings {
+            font_size: self.font_size,
+            ui_scale: self.ui_scale,
+            show_scrollbar: self.show_scrollbar,
+        };
+
+        let config_path = config_dir.join("ui_settings.json");
+        let content = serde_json::to_string_pretty(&settings)?;
         std::fs::write(&config_path, content)?;
         Ok(())
     }

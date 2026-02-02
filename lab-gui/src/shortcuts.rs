@@ -39,6 +39,7 @@ pub enum ShortcutCategory {
     Mode,
     Navigation,
     View,
+    Tools,
     Other,
 }
 
@@ -50,6 +51,7 @@ impl ShortcutCategory {
             Self::Mode => "mode",
             Self::Navigation => "navigation",
             Self::View => "view",
+            Self::Tools => "tools",
             Self::Other => "other",
         }
     }
@@ -61,6 +63,7 @@ impl ShortcutCategory {
             Self::Mode,
             Self::Navigation,
             Self::View,
+            Self::Tools,
             Self::Other,
         ]
     }
@@ -72,6 +75,7 @@ impl ShortcutCategory {
             Self::Mode => "shortcuts.category_mode",
             Self::Navigation => "shortcuts.category_navigation",
             Self::View => "shortcuts.category_view",
+            Self::Tools => "shortcuts.category_tools",
             Self::Other => "shortcuts.category_other",
         }
     }
@@ -354,8 +358,8 @@ impl ShortcutAction {
             | Self::MoveUp
             | Self::MoveDown
             | Self::ScaleUp
-            | Self::ScaleDown
-            | Self::Cancel => ShortcutCategory::Other,
+            | Self::ScaleDown => ShortcutCategory::Tools,
+            Self::Cancel => ShortcutCategory::Other,
             Self::ToggleAutoSave
             | Self::ToggleLeftPanel
             | Self::ToggleRightPanel

@@ -8,6 +8,13 @@ impl LabApp {
             let now = ctx.input(|i| i.time);
             let double_click_delay = ctx.options(|o| o.input_options.max_double_click_delay);
 
+            // Get translated text for "no image loaded" message
+            let no_image_text = format!(
+                "{}\n{}",
+                self.state.i18n.t("canvas.no_image_loaded"),
+                self.state.i18n.t("canvas.open_project_hint")
+            );
+
             let canvas_response = self.canvas.show(
                 ui,
                 self.state.current_image.as_ref(),
@@ -17,6 +24,7 @@ impl LabApp {
                 self.state.editing_state.selected_vertex,
                 &self.state.temp_points,
                 self.state.editing_state.mode,
+                &no_image_text,
             );
 
             if let (Some(image), Some(image_rect), Some(pointer_pos)) = (

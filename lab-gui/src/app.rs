@@ -14,7 +14,7 @@ mod status_bar;
 mod toolbar;
 
 use about_dialog::AboutDialogState;
-use options_dialog::{DialogButtonAction, DialogSettings, OptionsDialogState};
+use options_dialog::{DialogButtonAction, OptionsDialogState};
 
 const ZOOM_LEVELS: [f32; 9] = [25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 200.0, 300.0, 400.0];
 
@@ -24,10 +24,18 @@ pub struct LabApp {
     shortcut_editor: Option<crate::shortcuts::ShortcutEditorState>,
     options_dialog: OptionsDialogState,
     about_dialog: AboutDialogState,
+    // UI settings
+    ui_scale: f32,
+    pixels_per_point: f32,
 }
 
 impl LabApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Create state first to get saved settings
+        let state = AppState::new();
+        let font_size = state.font_size;
+        let ui_scale = state.ui_scale;
+
         // Configure fonts for Chinese support
         let mut fonts = egui::FontDefinitions::default();
 
@@ -55,12 +63,19 @@ impl LabApp {
 
         cc.egui_ctx.set_fonts(fonts);
 
+        // Set initial pixels_per_point based on font size
+        // Base font size is 14.0, so scale = font_size / 14.0
+        let pixels_per_point = (font_size / 14.0) * ui_scale;
+        cc.egui_ctx.set_pixels_per_point(pixels_per_point);
+
         Self {
-            state: AppState::new(),
+            state,
             canvas: Canvas::new(),
             shortcut_editor: None,
             options_dialog: OptionsDialogState::new(crate::i18n::Language::ZhCN, false),
             about_dialog: AboutDialogState::new(),
+            ui_scale,
+            pixels_per_point,
         }
     }
 
@@ -93,6 +108,8 @@ impl eframe::App for LabApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Apply theme
         self.apply_theme(ctx);
+        // Apply UI scale (font size and zoom)
+        self.apply_ui_scale(ctx);
 
         let mut status_hint: Option<String> = None;
         let mut cursor_pixel_pos: Option<(i32, i32)> = None;
@@ -222,12 +239,14 @@ impl LabApp {
             self.options_dialog.refresh_from_state(
                 self.state.language,
                 self.state.auto_save_enabled,
-                self.state.theme_color
+                self.state.theme_color,
+                self.state.font_size,
+                self.state.ui_scale
             );
             self.options_dialog.show_dialog(self.state.shortcut_manager.get_config());
         }
 
-        let (show, open, button_action) = self.options_dialog.show(ctx, &self.state.i18n);
+        let (_show, open, button_action) = self.options_dialog.show(ctx, &self.state.i18n);
 
         if let Some(action) = button_action {
             match action {
@@ -245,6 +264,10 @@ impl LabApp {
                     // Discard changes and close dialog
                     self.state.show_options_dialog = false;
                     self.options_dialog.shortcut_editor = None;
+                }
+                DialogButtonAction::RestoreDefaults => {
+                    // Restore default settings and keep dialog open
+                    self.options_dialog.restore_defaults();
                 }
             }
         }
@@ -286,6 +309,21 @@ impl LabApp {
             log::error!("Failed to save theme setting: {}", e);
         }
 
+        // Apply font size and UI scale to state
+        self.state.font_size = settings.font_size;
+        self.state.ui_scale = settings.ui_scale;
+        self.state.show_scrollbar = settings.show_scrollbar;
+
+        // Apply to app
+        self.ui_scale = settings.ui_scale;
+        // pixels_per_point = (font_size / 14.0) * ui_scale
+        self.pixels_per_point = (settings.font_size / 14.0) * settings.ui_scale;
+
+        // Save UI settings
+        if let Err(e) = self.state.save_ui_settings() {
+            log::error!("Failed to save UI settings: {}", e);
+        }
+
         // Apply shortcut changes
         if let Some(config) = settings.shortcut_config {
             self.state.shortcut_manager.apply_config(config);
@@ -294,12 +332,12 @@ impl LabApp {
             }
         }
 
-        // TODO: Apply new settings
-        // Font size, UI scale, and scrollbar visibility
-        // These require additional UI context and state management
-        let _ = (settings.font_size, settings.ui_scale, settings.show_scrollbar);
         log::info!("Options applied: auto_save={}, font_size={}, ui_scale={}, theme={:?}, scrollbar={}",
             settings.auto_save, settings.font_size, settings.ui_scale, settings.theme_color, settings.show_scrollbar);
+    }
+
+    fn apply_ui_scale(&self, ctx: &egui::Context) {
+        ctx.set_pixels_per_point(self.pixels_per_point);
     }
 
     fn show_about_dialog(&mut self, ctx: &egui::Context) {

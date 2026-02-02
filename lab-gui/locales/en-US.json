@@ -106,6 +106,10 @@
     "cursor": "Coord",
     "hint": "Hint"
   },
+  "canvas": {
+    "no_image_loaded": "No image loaded",
+    "open_project_hint": "Open a project to start annotating"
+  },
   "hint": {
     "shortcut": "Shortcut",
     "menu_file": "File menu: open/save/auto-save/import/export/close projects",
@@ -237,6 +241,7 @@
     "category_mode": "Mode",
     "category_navigation": "Navigation",
     "category_view": "View",
+    "category_tools": "Tools",
     "category_other": "Other",
     "scope_global": "Global",
     "scope_normal": "Browse Mode",
@@ -307,7 +312,8 @@
     "auto_save": "Auto Save",
     "apply": "Apply",
     "ok": "OK",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "restore_defaults": "Restore Defaults"
   },
   "about": {
     "title": "About JLab",
