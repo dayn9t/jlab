@@ -1,0 +1,9 @@
+[package]
+name = "lab-utils"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+lab-core = { path = "../lab-core" }
+anyhow.workspace = true
+thiserror.workspace = true

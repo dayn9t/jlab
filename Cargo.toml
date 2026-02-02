@@ -1,0 +1,26 @@
+[workspace]
+members = [
+    "lab-core", "lab-gui",
+    "lab-utils",
+]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.6.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/jlab"
+
+[workspace.dependencies]
+# Common dependencies can be defined here and referenced by workspace members
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+[patch.crates-io]
+ashpd = { path = "vendor/ashpd-0.8.1" }

@@ -1,0 +1,38 @@
+[package]
+name = "lab-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lab-core = { path = "../lab-core" }
+lab-utils = { path = "../lab-utils" }
+anyhow.workspace = true
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+sys-locale = "0.3"
+dirs = "5.0"
+
+# GUI framework
+eframe = "0.30"
+egui = "0.30"
+egui_extras = { version = "0.30", features = ["image"] }
+
+# Image loading
+image = "0.25"
+
+# File dialog
+rfd = "0.14.1"
+
+# Open URLs in browser
+open = "5.0"
+
+# Logging
+env_logger = "0.11"
+log = "0.4"
+
+# Command-line argument parsing
+clap = { version = "4.5", features = ["derive"] }

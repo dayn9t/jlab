@@ -1,0 +1,13 @@
+[package]
+name = "lab-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_yaml.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+rx-core = { path = "/home/jiang/rs/rx/rx-core" }

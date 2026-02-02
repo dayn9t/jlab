@@ -1,0 +1,90 @@
+id: 201
+name: FDOD
+description: 宠物医院前台目标检测，及其属性分类，简单示例
+shape:
+  title_style: 1
+  thickness: 2
+  auto_save: true
+  vertex_radius: 10.0
+roi:
+  color: '#800080'
+categories:
+- id: -1
+  name: pending
+  description: 种类待定
+  hotkey: '0'
+  color: '#FFFFFF'
+  properties: []
+- id: 0
+  name: person
+  description: 人员
+  hotkey: '1'
+  color: '#FF0000'
+  properties:
+  - id: 0
+    name: role
+    type: role
+  - id: 1
+    name: gender
+    type: gender
+- id: 1
+  name: cat
+  description: 猫
+  hotkey: '2'
+  color: '#FFFF00'
+  properties:
+  - id: 0
+    name: gender
+    type: gender
+property_types:
+- id: 1
+  name: role
+  description: 人员角色
+  values:
+  - id: 0
+    name: clerk
+    description: 职员
+    hotkey: '1'
+    color: BROWN
+    sign: CL
+  - id: 1
+    name: customer
+    description: 客户
+    hotkey: '2'
+    color: YELLOW
+    sign: CU
+- id: 2
+  name: gender
+  description: 性别
+  values:
+  - id: 0
+    name: male
+    description: 雄性
+    hotkey: '1'
+    color: BROWN
+    sign: M
+  - id: 1
+    name: female
+    description: 雌性
+    hotkey: '2'
+    color: YELLOW
+    sign: F
+property_special_values:
+- id: -3
+  name: error
+  description: 检测器错误
+  hotkey: r
+  color: PINK
+  sign: E
+- id: -2
+  name: excluded
+  description: 排除争议样本
+  hotkey: e
+  color: PURPLE
+  sign: X
+- id: -1
+  name: pending
+  description: 待定
+  hotkey: q
+  color: WHITE
+  sign: P

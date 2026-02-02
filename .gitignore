@@ -1,0 +1,38 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Local patches
+/vendor/
+
+# Editor
+.obsidian/
+
+# Cargo.lock for libraries (uncomment if this is a binary project)
+# Cargo.lock
+
+# Debug files
+**/*.pdb
+
+# IDE/Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test outputs
+*.test
+
+# Backup files
+*.bak
+*~
+
+# OS files
+Thumbs.db
+
+# image files
+*.png
+*.jpg
+*.ttc
