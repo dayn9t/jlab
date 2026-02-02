@@ -7,11 +7,11 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Will Jiang <dayn9t@gmail.com>"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/jlab"
+repository = "https://github.com/dayn9t/jlab"
 
 [workspace.dependencies]
 # Common dependencies can be defined here and referenced by workspace members

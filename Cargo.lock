@@ -2962,7 +2962,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "lab-core"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2975,7 +2975,7 @@ dependencies = [
 
 [[package]]
 name = "lab-gui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2998,7 +2998,7 @@ dependencies = [
 
 [[package]]
 name = "lab-utils"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "lab-core",
