@@ -955,7 +955,7 @@ impl Canvas {
                     .find_vertex_at_pos(pos, annotation, selected_object_id, image_rect, image_size)
                     .is_some()
                 {
-                    return egui::CursorIcon::Grab;
+                    return egui::CursorIcon::PointingHand;
                 }
 
                 // Check for object (selected only)
