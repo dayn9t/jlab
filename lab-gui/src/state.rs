@@ -62,10 +62,7 @@ pub struct EditingState {
 
 impl EditingState {
     pub fn new() -> Self {
-        Self {
-            mode: EditMode::Browse,
-            selected_vertex: None,
-        }
+        Self { mode: EditMode::Browse, selected_vertex: None }
     }
 }
 
@@ -242,10 +239,8 @@ impl AppState {
             });
 
         self.project = Some(project);
-        self.default_category_id = self
-            .project
-            .as_ref()
-            .and_then(|p| p.meta.categories.first().map(|c| c.id));
+        self.default_category_id =
+            self.project.as_ref().and_then(|p| p.meta.categories.first().map(|c| c.id));
         self.images = images;
         self.current_image_index = 0;
 
@@ -455,10 +450,7 @@ impl AppState {
                         .polygon
                         .0
                         .iter()
-                        .map(|p| Point {
-                            x: (p.x + offset).min(1.0),
-                            y: (p.y + offset).min(1.0),
-                        })
+                        .map(|p| Point { x: (p.x + offset).min(1.0), y: (p.y + offset).min(1.0) })
                         .collect::<Vec<_>>(),
                 );
                 label.objects.push(new_obj);
@@ -472,10 +464,7 @@ impl AppState {
                 let new_roi = Polygon::from(
                     roi.0
                         .iter()
-                        .map(|p| Point {
-                            x: (p.x + offset).min(1.0),
-                            y: (p.y + offset).min(1.0),
-                        })
+                        .map(|p| Point { x: (p.x + offset).min(1.0), y: (p.y + offset).min(1.0) })
                         .collect::<Vec<_>>(),
                 );
                 label.rois.push(new_roi);
@@ -580,13 +569,8 @@ impl AppState {
 
     /// Load language setting from config file
     fn load_language_setting() -> Option<crate::i18n::Language> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .ok()?;
-        let config_path = PathBuf::from(home)
-            .join(".config")
-            .join("jlab")
-            .join("language.json");
+        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok()?;
+        let config_path = PathBuf::from(home).join(".config").join("jlab").join("language.json");
 
         if !config_path.exists() {
             return None;
@@ -613,13 +597,8 @@ impl AppState {
 
     /// Load auto-save setting from config file
     fn load_auto_save_setting() -> Option<bool> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .ok()?;
-        let config_path = PathBuf::from(home)
-            .join(".config")
-            .join("jlab")
-            .join("auto_save.json");
+        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok()?;
+        let config_path = PathBuf::from(home).join(".config").join("jlab").join("auto_save.json");
 
         if !config_path.exists() {
             return None;
@@ -646,13 +625,8 @@ impl AppState {
 
     /// Load theme setting from config file
     fn load_theme_setting() -> Option<ThemeColor> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .ok()?;
-        let config_path = PathBuf::from(home)
-            .join(".config")
-            .join("jlab")
-            .join("theme.json");
+        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok()?;
+        let config_path = PathBuf::from(home).join(".config").join("jlab").join("theme.json");
 
         if !config_path.exists() {
             return None;
@@ -684,10 +658,7 @@ impl AppState {
             Ok(h) => h,
             Err(_) => return (None, None, None),
         };
-        let config_path = PathBuf::from(home)
-            .join(".config")
-            .join("jlab")
-            .join("ui_settings.json");
+        let config_path = PathBuf::from(home).join(".config").join("jlab").join("ui_settings.json");
 
         if !config_path.exists() {
             return (None, None, None);
@@ -710,11 +681,7 @@ impl AppState {
             Err(_) => return (None, None, None),
         };
 
-        (
-            settings.font_size,
-            settings.ui_scale,
-            settings.show_scrollbar,
-        )
+        (settings.font_size, settings.ui_scale, settings.show_scrollbar)
     }
 
     /// Save UI settings to config file

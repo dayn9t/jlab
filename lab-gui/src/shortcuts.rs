@@ -245,28 +245,14 @@ impl ShortcutAction {
     /// Get default modifiers for this action
     pub fn default_modifiers(&self) -> KeyModifiers {
         match self {
-            Self::OpenProject | Self::Save | Self::Quit => KeyModifiers {
-                ctrl: true,
-                shift: false,
-                alt: false,
-            },
-            Self::Copy | Self::Paste => KeyModifiers {
-                ctrl: true,
-                shift: false,
-                alt: false,
-            },
-            Self::SwitchToNormalMode | Self::SwitchToDrawingMode | Self::SwitchToEditingMode => {
-                KeyModifiers {
-                    ctrl: false,
-                    shift: true,
-                    alt: false,
-                }
+            Self::OpenProject | Self::Save | Self::Quit => {
+                KeyModifiers { ctrl: true, shift: false, alt: false }
             }
-            Self::CyclePreviousObject => KeyModifiers {
-                ctrl: false,
-                shift: true,
-                alt: false,
-            },
+            Self::Copy | Self::Paste => KeyModifiers { ctrl: true, shift: false, alt: false },
+            Self::SwitchToNormalMode | Self::SwitchToDrawingMode | Self::SwitchToEditingMode => {
+                KeyModifiers { ctrl: false, shift: true, alt: false }
+            }
+            Self::CyclePreviousObject => KeyModifiers { ctrl: false, shift: true, alt: false },
             Self::ToggleAutoSave
             | Self::ToggleLeftPanel
             | Self::ToggleRightPanel
@@ -278,16 +264,8 @@ impl ShortcutAction {
             | Self::Zoom150
             | Self::Zoom200
             | Self::Zoom300
-            | Self::Zoom400 => KeyModifiers {
-                ctrl: false,
-                shift: false,
-                alt: false,
-            },
-            _ => KeyModifiers {
-                ctrl: false,
-                shift: false,
-                alt: false,
-            },
+            | Self::Zoom400 => KeyModifiers { ctrl: false, shift: false, alt: false },
+            _ => KeyModifiers { ctrl: false, shift: false, alt: false },
         }
     }
 
@@ -480,11 +458,7 @@ pub struct KeyModifiers {
 
 impl Default for KeyModifiers {
     fn default() -> Self {
-        Self {
-            ctrl: false,
-            shift: false,
-            alt: false,
-        }
+        Self { ctrl: false, shift: false, alt: false }
     }
 }
 
@@ -644,10 +618,7 @@ impl ShortcutManager {
 
     /// Get binding for an action
     pub fn get_binding(&self, action: ShortcutAction) -> Option<&ShortcutBinding> {
-        self.config
-            .shortcuts
-            .iter()
-            .find(|b| b.action == action.as_str())
+        self.config.shortcuts.iter().find(|b| b.action == action.as_str())
     }
 
     /// Merge configuration (for project-specific overrides)
@@ -767,11 +738,8 @@ impl ShortcutManager {
                 _ => continue,
             };
 
-            let modifiers = KeyModifiers {
-                ctrl: binding.ctrl,
-                shift: binding.shift,
-                alt: binding.alt,
-            };
+            let modifiers =
+                KeyModifiers { ctrl: binding.ctrl, shift: binding.shift, alt: binding.alt };
 
             let scope = binding.scope;
 
@@ -885,10 +853,7 @@ impl ShortcutManager {
         // Try to load project config
         let project_config_path = project_dir.join("shortcuts.yaml");
         if project_config_path.exists() {
-            log::info!(
-                "Loading project shortcuts config from {:?}",
-                project_config_path
-            );
+            log::info!("Loading project shortcuts config from {:?}", project_config_path);
             let project_config: ShortcutConfig = {
                 let content = std::fs::read_to_string(&project_config_path).with_context(|| {
                     format!(
@@ -982,10 +947,7 @@ impl ShortcutManager {
             })
             .collect();
 
-        ShortcutConfig {
-            version: "1.0".to_string(),
-            shortcuts,
-        }
+        ShortcutConfig { version: "1.0".to_string(), shortcuts }
     }
 
     /// Build bindings map from config
@@ -1093,11 +1055,8 @@ impl ShortcutManager {
                 _ => continue, // Skip unknown keys
             };
 
-            let modifiers = KeyModifiers {
-                ctrl: binding.ctrl,
-                shift: binding.shift,
-                alt: binding.alt,
-            };
+            let modifiers =
+                KeyModifiers { ctrl: binding.ctrl, shift: binding.shift, alt: binding.alt };
 
             bindings.insert((key, modifiers, binding.scope), action);
         }
@@ -1124,11 +1083,7 @@ impl ShortcutEditorState {
             working_config: current_config.clone(),
             editing_action: None,
             captured_key: None,
-            captured_modifiers: KeyModifiers {
-                ctrl: false,
-                shift: false,
-                alt: false,
-            },
+            captured_modifiers: KeyModifiers { ctrl: false, shift: false, alt: false },
             search_filter: String::new(),
             category_filter: None,
             conflict_count: 0,
@@ -1141,11 +1096,7 @@ impl ShortcutEditorState {
     pub fn start_editing(&mut self, action: ShortcutAction) {
         self.editing_action = Some(action);
         self.captured_key = None;
-        self.captured_modifiers = KeyModifiers {
-            ctrl: false,
-            shift: false,
-            alt: false,
-        };
+        self.captured_modifiers = KeyModifiers { ctrl: false, shift: false, alt: false };
         self.is_capturing = true;
     }
 
@@ -1163,11 +1114,8 @@ impl ShortcutEditorState {
     }
 
     fn update_binding(&mut self, action: ShortcutAction, key: egui::Key, modifiers: KeyModifiers) {
-        if let Some(binding) = self
-            .working_config
-            .shortcuts
-            .iter_mut()
-            .find(|b| b.action == action.as_str())
+        if let Some(binding) =
+            self.working_config.shortcuts.iter_mut().find(|b| b.action == action.as_str())
         {
             binding.key = format!("{:?}", key);
             binding.ctrl = modifiers.ctrl;

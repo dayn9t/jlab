@@ -44,38 +44,28 @@ impl LabApp {
     }
 
     fn try_import_dataset(&mut self, format: DatasetFormat) -> anyhow::Result<()> {
-        let project = self
-            .state
-            .project
-            .as_ref()
-            .context(self.state.i18n.t("error.no_project"))?;
+        let project = self.state.project.as_ref().context(self.state.i18n.t("error.no_project"))?;
         let meta = project.meta.clone();
         let existing_names = self
             .state
             .images
             .iter()
-            .filter_map(|p| {
-                p.file_name()
-                    .and_then(|s| s.to_str())
-                    .map(|s| s.to_string())
-            })
+            .filter_map(|p| p.file_name().and_then(|s| s.to_str()).map(|s| s.to_string()))
             .collect::<HashSet<String>>();
         let duplicate_template = self.state.i18n.t("error.import_duplicate_image");
 
         let imported = match format {
             DatasetFormat::Yolo => {
-                let Some(root) = rfd::FileDialog::new()
-                    .set_title("Select YOLO dataset root")
-                    .pick_folder()
+                let Some(root) =
+                    rfd::FileDialog::new().set_title("Select YOLO dataset root").pick_folder()
                 else {
                     return Ok(());
                 };
                 self.import_from_yolo(&root, &meta)?
             }
             DatasetFormat::Voc => {
-                let Some(root) = rfd::FileDialog::new()
-                    .set_title("Select VOC dataset root")
-                    .pick_folder()
+                let Some(root) =
+                    rfd::FileDialog::new().set_title("Select VOC dataset root").pick_folder()
                 else {
                     return Ok(());
                 };
@@ -89,18 +79,16 @@ impl LabApp {
                 else {
                     return Ok(());
                 };
-                let Some(images_dir) = rfd::FileDialog::new()
-                    .set_title("Select COCO images folder")
-                    .pick_folder()
+                let Some(images_dir) =
+                    rfd::FileDialog::new().set_title("Select COCO images folder").pick_folder()
                 else {
                     return Ok(());
                 };
                 self.import_from_coco(&json_path, &images_dir, &meta)?
             }
             DatasetFormat::LabelMe => {
-                let Some(root) = rfd::FileDialog::new()
-                    .set_title("Select LabelMe folder")
-                    .pick_folder()
+                let Some(root) =
+                    rfd::FileDialog::new().set_title("Select LabelMe folder").pick_folder()
                 else {
                     return Ok(());
                 };
@@ -114,16 +102,11 @@ impl LabApp {
     }
 
     fn try_export_dataset(&mut self, format: DatasetFormat) -> anyhow::Result<()> {
-        let project = self
-            .state
-            .project
-            .as_ref()
-            .context(self.state.i18n.t("error.no_project"))?;
+        let project = self.state.project.as_ref().context(self.state.i18n.t("error.no_project"))?;
         let meta = project.meta.clone();
 
-        let Some(output_root) = rfd::FileDialog::new()
-            .set_title("Select export folder")
-            .pick_folder()
+        let Some(output_root) =
+            rfd::FileDialog::new().set_title("Select export folder").pick_folder()
         else {
             return Ok(());
         };
@@ -182,12 +165,7 @@ impl LabApp {
                 let coco_items: Vec<(String, Label, u32, u32)> = export_items
                     .iter()
                     .map(|item| {
-                        (
-                            item.file_name.clone(),
-                            item.annotation.clone(),
-                            item.width,
-                            item.height,
-                        )
+                        (item.file_name.clone(), item.annotation.clone(), item.width, item.height)
                     })
                     .collect();
                 export_coco_batch(&coco_path, &coco_items, &meta)?;
@@ -224,11 +202,7 @@ struct ExportItem {
 impl LabApp {
     fn refresh_project_images(&mut self) -> anyhow::Result<()> {
         if let Some(project) = &self.state.project {
-            let current_path = self
-                .state
-                .current_image
-                .as_ref()
-                .map(|img| img.path.clone());
+            let current_path = self.state.current_image.as_ref().map(|img| img.path.clone());
             self.state.images = project.list_images()?;
             if let Some(current_path) = current_path {
                 if let Some(idx) = self.state.images.iter().position(|p| p == &current_path) {
@@ -264,14 +238,7 @@ impl LabApp {
                 .load_annotation(&file_name)?
                 .unwrap_or_else(|| lab_core::new_label("export"));
 
-            items.push(ExportItem {
-                image_path,
-                file_name,
-                stem,
-                width,
-                height,
-                annotation,
-            });
+            items.push(ExportItem { image_path, file_name, stem, width, height, annotation });
         }
         Ok(items)
     }
@@ -286,14 +253,10 @@ fn merge_imported_images(
     let mut incoming_names = HashSet::new();
     for item in &imported {
         if existing_names.contains(&item.file_name) {
-            return Err(anyhow::anyhow!(
-                duplicate_template.replace("{name}", &item.file_name)
-            ));
+            return Err(anyhow::anyhow!(duplicate_template.replace("{name}", &item.file_name)));
         }
         if !incoming_names.insert(item.file_name.clone()) {
-            return Err(anyhow::anyhow!(
-                duplicate_template.replace("{name}", &item.file_name)
-            ));
+            return Err(anyhow::anyhow!(duplicate_template.replace("{name}", &item.file_name)));
         }
     }
 
@@ -322,9 +285,7 @@ impl LabApp {
         let images_dir = root.join("images");
         let labels_dir = root.join("labels");
         if !images_dir.exists() || !labels_dir.exists() {
-            return Err(anyhow::anyhow!(
-                "YOLO root must contain images/ and labels/ directories"
-            ));
+            return Err(anyhow::anyhow!("YOLO root must contain images/ and labels/ directories"));
         }
 
         let image_paths = list_images_in_dir(&images_dir)?;
@@ -336,10 +297,8 @@ impl LabApp {
                 .and_then(|s| s.to_str())
                 .context("Invalid image name")?
                 .to_string();
-            let stem = Path::new(&file_name)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(&file_name);
+            let stem =
+                Path::new(&file_name).file_stem().and_then(|s| s.to_str()).unwrap_or(&file_name);
             let label_path = labels_dir.join(format!("{}.txt", stem));
 
             let mut objects = Vec::new();
@@ -391,11 +350,7 @@ impl LabApp {
             }
 
             let annotation = build_label(objects, "import");
-            imported.push(ImportedImage {
-                source_path: image_path,
-                file_name,
-                annotation,
-            });
+            imported.push(ImportedImage { source_path: image_path, file_name, annotation });
         }
 
         Ok(imported)
@@ -423,10 +378,8 @@ impl LabApp {
                 .and_then(|s| s.to_str())
                 .context("Invalid image name")?
                 .to_string();
-            let stem = Path::new(&file_name)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(&file_name);
+            let stem =
+                Path::new(&file_name).file_stem().and_then(|s| s.to_str()).unwrap_or(&file_name);
             let label_path = labels_dir.join(format!("{}.xml", stem));
 
             let mut objects = Vec::new();
@@ -461,11 +414,7 @@ impl LabApp {
             }
 
             let annotation = build_label(objects, "import");
-            imported.push(ImportedImage {
-                source_path: image_path,
-                file_name,
-                annotation,
-            });
+            imported.push(ImportedImage { source_path: image_path, file_name, annotation });
         }
 
         Ok(imported)
@@ -491,10 +440,7 @@ impl LabApp {
 
         let mut annotations_by_image: HashMap<i32, Vec<CocoAnnotation>> = HashMap::new();
         for ann in dataset.annotations {
-            annotations_by_image
-                .entry(ann.image_id)
-                .or_default()
-                .push(ann);
+            annotations_by_image.entry(ann.image_id).or_default().push(ann);
         }
 
         let mut imported = Vec::new();
@@ -506,10 +452,7 @@ impl LabApp {
                 .to_string();
             let source_path = images_dir.join(&image.file_name);
             if !source_path.exists() {
-                return Err(anyhow::anyhow!(format!(
-                    "Missing image file: {:?}",
-                    source_path
-                )));
+                return Err(anyhow::anyhow!(format!("Missing image file: {:?}", source_path)));
             }
 
             let mut objects = Vec::new();
@@ -547,11 +490,7 @@ impl LabApp {
             }
 
             let annotation = build_label(objects, "import");
-            imported.push(ImportedImage {
-                source_path,
-                file_name,
-                annotation,
-            });
+            imported.push(ImportedImage { source_path, file_name, annotation });
         }
 
         Ok(imported)
@@ -580,19 +519,14 @@ impl LabApp {
                     .context("Invalid image name")?
                     .to_string()
             } else {
-                let stem = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .context("Invalid label file name")?;
+                let stem =
+                    path.file_stem().and_then(|s| s.to_str()).context("Invalid label file name")?;
                 find_image_by_stem(root, stem)?
             };
 
             let source_path = root.join(&file_name);
             if !source_path.exists() {
-                return Err(anyhow::anyhow!(format!(
-                    "Missing image file: {:?}",
-                    source_path
-                )));
+                return Err(anyhow::anyhow!(format!("Missing image file: {:?}", source_path)));
             }
 
             let mut objects = Vec::new();
@@ -614,11 +548,7 @@ impl LabApp {
             }
 
             let annotation = build_label(objects, "import");
-            imported.push(ImportedImage {
-                source_path,
-                file_name,
-                annotation,
-            });
+            imported.push(ImportedImage { source_path, file_name, annotation });
         }
 
         Ok(imported)
@@ -685,11 +615,7 @@ fn list_images_in_dir(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
         if !path.is_file() {
             continue;
         }
-        let ext = path
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_lowercase();
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
         if ext == "jpg" || ext == "jpeg" || ext == "png" {
             images.push(path);
         }
@@ -737,10 +663,7 @@ fn build_label(objects: Vec<Object>, user_agent: &str) -> Option<Label> {
 }
 
 fn find_category_id_by_name(meta: &lab_core::LabelMeta, name: &str) -> Option<i32> {
-    meta.categories
-        .iter()
-        .find(|cat| cat.name == name)
-        .map(|cat| cat.id)
+    meta.categories.iter().find(|cat| cat.name == name).map(|cat| cat.id)
 }
 
 fn parse_voc_size(xml: &str) -> Option<(f32, f32)> {
@@ -786,13 +709,7 @@ fn parse_voc_objects(xml: &str) -> Vec<VocObject> {
             None => continue,
         };
 
-        objects.push(VocObject {
-            label,
-            xmin,
-            ymin,
-            xmax,
-            ymax,
-        });
+        objects.push(VocObject { label, xmin, ymin, xmax, ymax });
     }
     objects
 }
@@ -858,11 +775,7 @@ fn labelme_shape_to_polygon(shape: &LabelMeShape, width: u32, height: u32) -> Po
     if width == 0 || height == 0 {
         return Polygon::empty();
     }
-    let shape_type = shape
-        .shape_type
-        .as_deref()
-        .unwrap_or("polygon")
-        .to_lowercase();
+    let shape_type = shape.shape_type.as_deref().unwrap_or("polygon").to_lowercase();
 
     let polygon = match shape_type.as_str() {
         "rectangle" if shape.points.len() >= 2 => {

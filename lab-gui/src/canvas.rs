@@ -121,19 +121,15 @@ impl Canvas {
 
             // Get or create texture for the image
             let texture_id = format!("{:?}", image_data.path);
-            let texture = self
-                .texture_cache
-                .entry(texture_id.clone())
-                .or_insert_with(|| {
-                    // Convert pixels to ColorImage
-                    let color_image = ColorImage::from_rgba_unmultiplied(
-                        [image_data.width as usize, image_data.height as usize],
-                        &image_data.pixels,
-                    );
-                    // Load texture
-                    ui.ctx()
-                        .load_texture(&texture_id, color_image, Default::default())
-                });
+            let texture = self.texture_cache.entry(texture_id.clone()).or_insert_with(|| {
+                // Convert pixels to ColorImage
+                let color_image = ColorImage::from_rgba_unmultiplied(
+                    [image_data.width as usize, image_data.height as usize],
+                    &image_data.pixels,
+                );
+                // Load texture
+                ui.ctx().load_texture(&texture_id, color_image, Default::default())
+            });
 
             // Draw the actual image texture
             painter.image(
@@ -351,10 +347,7 @@ impl Canvas {
                             response.clicked_pos = Some(normalized_pos);
                         } else {
                             // In Editing mode and Browse mode, delay click to detect double-click
-                            self.pending_click = Some(PendingClick {
-                                pos,
-                                time: current_time,
-                            });
+                            self.pending_click = Some(PendingClick { pos, time: current_time });
                         }
                     } else {
                         // No annotation
@@ -599,10 +592,8 @@ impl Canvas {
         }
 
         // Convert normalized coordinates to screen coordinates
-        let screen_points: Vec<Pos2> = points
-            .iter()
-            .map(|p| self.normalized_to_screen(p, image_rect, image_size))
-            .collect();
+        let screen_points: Vec<Pos2> =
+            points.iter().map(|p| self.normalized_to_screen(p, image_rect, image_size)).collect();
 
         // Draw polygon edges
         let stroke_width = if is_selected { 3.0 } else { 2.0 };
@@ -656,17 +647,12 @@ impl Canvas {
         }
 
         let color = Color32::YELLOW;
-        let screen_points: Vec<Pos2> = points
-            .iter()
-            .map(|p| self.normalized_to_screen(p, image_rect, image_size))
-            .collect();
+        let screen_points: Vec<Pos2> =
+            points.iter().map(|p| self.normalized_to_screen(p, image_rect, image_size)).collect();
 
         // Draw lines between points
         for i in 0..screen_points.len().saturating_sub(1) {
-            painter.line_segment(
-                [screen_points[i], screen_points[i + 1]],
-                Stroke::new(2.0, color),
-            );
+            painter.line_segment([screen_points[i], screen_points[i + 1]], Stroke::new(2.0, color));
         }
 
         // Draw vertices

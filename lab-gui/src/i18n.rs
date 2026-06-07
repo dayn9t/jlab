@@ -61,10 +61,7 @@ impl I18n {
     pub fn t(&self, key: &str) -> String {
         let parts: Vec<&str> = key.split('.').collect();
         let mut value = &serde_json::Value::Object(
-            self.translations
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
+            self.translations.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
         );
 
         for part in &parts {
@@ -74,10 +71,7 @@ impl I18n {
             };
         }
 
-        value
-            .as_str()
-            .unwrap_or(&format!("[Invalid: {}]", key))
-            .to_string()
+        value.as_str().unwrap_or(&format!("[Invalid: {}]", key)).to_string()
     }
 
     /// Set language (reloads translations)

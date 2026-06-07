@@ -12,11 +12,7 @@ pub struct ValidationResult {
 
 impl ValidationResult {
     pub fn new() -> Self {
-        Self {
-            is_valid: true,
-            errors: Vec::new(),
-            warnings: Vec::new(),
-        }
+        Self { is_valid: true, errors: Vec::new(), warnings: Vec::new() }
     }
 
     pub fn add_error(&mut self, error: String) {
@@ -41,10 +37,7 @@ pub fn validate_annotation(label: &Label, meta: &LabelMeta) -> ValidationResult 
     for (idx, obj) in label.objects.iter().enumerate() {
         // Validate category exists
         if find_category(meta, obj.category).is_none() {
-            result.add_error(format!(
-                "Object {} has invalid category ID: {}",
-                idx, obj.category
-            ));
+            result.add_error(format!("Object {} has invalid category ID: {}", idx, obj.category));
         }
 
         // Validate polygon has at least 3 points
@@ -115,9 +108,7 @@ mod tests {
                 auto_save: true,
                 vertex_radius: 10.0,
             },
-            roi: RoiConfig {
-                color: "#800080".to_string(),
-            },
+            roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![],
             property_types: vec![],
             property_special_values: vec![],
@@ -152,9 +143,7 @@ mod tests {
                 auto_save: true,
                 vertex_radius: 10.0,
             },
-            roi: RoiConfig {
-                color: "#800080".to_string(),
-            },
+            roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![],
             property_types: vec![],
             property_special_values: vec![],

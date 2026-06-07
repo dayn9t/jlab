@@ -88,11 +88,8 @@ impl Exporter for CocoExporter {
             date_created: now.format("%Y-%m-%d").to_string(),
         };
 
-        let licenses = vec![CocoLicense {
-            id: 1,
-            name: "Unknown".to_string(),
-            url: "".to_string(),
-        }];
+        let licenses =
+            vec![CocoLicense { id: 1, name: "Unknown".to_string(), url: "".to_string() }];
 
         let mut images = Vec::new();
         let mut coco_annotations = Vec::new();
@@ -111,10 +108,7 @@ impl Exporter for CocoExporter {
                 height: *height,
                 file_name,
                 license: 1,
-                date_captured: annotation
-                    .created_at
-                    .format("%Y-%m-%d %H:%M:%S")
-                    .to_string(),
+                date_captured: annotation.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
             });
 
             for obj in &annotation.objects {
@@ -172,13 +166,8 @@ impl Exporter for CocoExporter {
             })
             .collect();
 
-        let dataset = CocoDataset {
-            info,
-            licenses,
-            images,
-            annotations: coco_annotations,
-            categories,
-        };
+        let dataset =
+            CocoDataset { info, licenses, images, annotations: coco_annotations, categories };
 
         let json = serde_json::to_string_pretty(&dataset)
             .map_err(|e| crate::Error::Export(format!("JSON serialization error: {}", e)))?;
@@ -219,9 +208,7 @@ mod tests {
                 auto_save: true,
                 vertex_radius: 10.0,
             },
-            roi: RoiConfig {
-                color: "#800080".to_string(),
-            },
+            roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![CatDef {
                 id: 0,
                 name: "person".to_string(),

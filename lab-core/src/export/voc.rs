@@ -14,10 +14,8 @@ impl Exporter for VocExporter {
         image_width: u32,
         image_height: u32,
     ) -> Result<String> {
-        let filename = Path::new(image_path)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown.jpg");
+        let filename =
+            Path::new(image_path).file_name().and_then(|s| s.to_str()).unwrap_or("unknown.jpg");
 
         let folder = Path::new(image_path)
             .parent()
@@ -65,9 +63,8 @@ impl Exporter for VocExporter {
             let ymax = (max_y * image_height as f32) as i32;
 
             // Get category name
-            let category_name = find_category(meta, obj.category)
-                .map(|c| c.name.as_str())
-                .unwrap_or("unknown");
+            let category_name =
+                find_category(meta, obj.category).map(|c| c.name.as_str()).unwrap_or("unknown");
 
             xml.push_str("  <object>\n");
             xml.push_str(&format!("    <name>{}</name>\n", category_name));
@@ -121,9 +118,7 @@ mod tests {
                 auto_save: true,
                 vertex_radius: 10.0,
             },
-            roi: RoiConfig {
-                color: "#800080".to_string(),
-            },
+            roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![CatDef {
                 id: 0,
                 name: "person".to_string(),
@@ -137,9 +132,8 @@ mod tests {
         };
 
         let exporter = VocExporter;
-        let result = exporter
-            .export_annotation(&label, &meta, "/path/to/test.jpg", 1000, 1000)
-            .unwrap();
+        let result =
+            exporter.export_annotation(&label, &meta, "/path/to/test.jpg", 1000, 1000).unwrap();
 
         assert!(result.contains("<annotation>"));
         assert!(result.contains("<name>person</name>"));

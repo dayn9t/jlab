@@ -34,8 +34,6 @@ pub trait Exporter {
         _meta: &LabelMeta,
     ) -> Result<String> {
         // Default implementation: not supported
-        Err(Error::Export(
-            "Batch export not supported for this format".to_string(),
-        ))
+        Err(Error::Export("Batch export not supported for this format".to_string()))
     }
 }

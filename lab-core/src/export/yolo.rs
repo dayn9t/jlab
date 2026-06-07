@@ -85,18 +85,14 @@ mod tests {
                 auto_save: true,
                 vertex_radius: 10.0,
             },
-            roi: RoiConfig {
-                color: "#800080".to_string(),
-            },
+            roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![],
             property_types: vec![],
             property_special_values: vec![],
         };
 
         let exporter = YoloExporter;
-        let result = exporter
-            .export_annotation(&label, &meta, "test.jpg", 1920, 1080)
-            .unwrap();
+        let result = exporter.export_annotation(&label, &meta, "test.jpg", 1920, 1080).unwrap();
 
         // Expected: class_id=0, x_center=0.3, y_center=0.3, width=0.4, height=0.4
         assert!(result.contains("0 0.300000 0.300000 0.400000 0.400000"));

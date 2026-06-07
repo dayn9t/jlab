@@ -36,11 +36,7 @@ impl AboutDialogState {
 
                     // App name and title
                     ui.heading(i18n.t("app.title"));
-                    ui.label(format!(
-                        "{}: {}",
-                        i18n.t("about.version"),
-                        env!("CARGO_PKG_VERSION")
-                    ));
+                    ui.label(format!("{}: {}", i18n.t("about.version"), env!("CARGO_PKG_VERSION")));
 
                     ui.add_space(20.0);
 
@@ -63,10 +59,7 @@ impl AboutDialogState {
                     ui.add_space(20.0);
 
                     // Close button (with Esc hint)
-                    if ui
-                        .button(format!("{} (Esc)", i18n.t("about.close")))
-                        .clicked()
-                    {
+                    if ui.button(format!("{} (Esc)", i18n.t("about.close"))).clicked() {
                         button_clicked = true;
                     }
                 });

@@ -143,12 +143,7 @@ impl LabApp {
 
     fn hint_with_shortcut(&self, hint: String, action: crate::shortcuts::ShortcutAction) -> String {
         if let Some(shortcut) = self.state.shortcut_manager.format_shortcut(action) {
-            format!(
-                "{} ({}: {})",
-                hint,
-                self.state.i18n.t("hint.shortcut"),
-                shortcut
-            )
+            format!("{} ({}: {})", hint, self.state.i18n.t("hint.shortcut"), shortcut)
         } else {
             hint
         }
@@ -243,8 +238,7 @@ impl LabApp {
                 self.state.font_size,
                 self.state.ui_scale,
             );
-            self.options_dialog
-                .show_dialog(self.state.shortcut_manager.get_config());
+            self.options_dialog.show_dialog(self.state.shortcut_manager.get_config());
         }
 
         let (_show, open, button_action) = self.options_dialog.show(ctx, &self.state.i18n);
@@ -464,23 +458,17 @@ impl LabApp {
         }
 
         // Shortcut list
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                self.render_shortcut_list(ui, editor);
-            });
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            self.render_shortcut_list(ui, editor);
+        });
 
         ui.separator();
 
         // Bottom buttons
         ui.horizontal(|ui| {
-            if ui
-                .button(self.state.i18n.t("shortcuts.reset_defaults"))
-                .clicked()
-            {
-                editor.working_config = crate::shortcuts::ShortcutManager::new()
-                    .get_config()
-                    .clone();
+            if ui.button(self.state.i18n.t("shortcuts.reset_defaults")).clicked() {
+                editor.working_config =
+                    crate::shortcuts::ShortcutManager::new().get_config().clone();
                 editor.refresh_conflicts();
             }
 
@@ -540,17 +528,11 @@ impl LabApp {
                 ui.label(self.state.i18n.t(binding.scope.name_key()));
                 ui.separator();
 
-                if ui
-                    .small_button(self.state.i18n.t("shortcuts.edit"))
-                    .clicked()
-                {
+                if ui.small_button(self.state.i18n.t("shortcuts.edit")).clicked() {
                     action_to_edit = Some(*action);
                 }
 
-                if ui
-                    .small_button(self.state.i18n.t("shortcuts.clear"))
-                    .clicked()
-                {
+                if ui.small_button(self.state.i18n.t("shortcuts.clear")).clicked() {
                     action_to_clear = Some(*action);
                 }
             });
@@ -561,10 +543,7 @@ impl LabApp {
             editor.start_editing(action);
         }
         if let Some(action) = action_to_clear {
-            editor
-                .working_config
-                .shortcuts
-                .retain(|b| b.action != action.as_str());
+            editor.working_config.shortcuts.retain(|b| b.action != action.as_str());
             editor.refresh_conflicts();
         }
     }
@@ -589,11 +568,8 @@ impl LabApp {
             ui.separator();
 
             // Current binding
-            if let Some(binding) = editor
-                .working_config
-                .shortcuts
-                .iter()
-                .find(|b| b.action == action.as_str())
+            if let Some(binding) =
+                editor.working_config.shortcuts.iter().find(|b| b.action == action.as_str())
             {
                 ui.label(format!(
                     "{}: {}",
@@ -626,11 +602,8 @@ impl LabApp {
             ui.horizontal(|ui| {
                 if ui.button(self.state.i18n.t("shortcuts.clear")).clicked() {
                     editor.captured_key = None;
-                    editor.captured_modifiers = crate::shortcuts::KeyModifiers {
-                        ctrl: false,
-                        shift: false,
-                        alt: false,
-                    };
+                    editor.captured_modifiers =
+                        crate::shortcuts::KeyModifiers { ctrl: false, shift: false, alt: false };
                 }
 
                 if ui.button(self.state.i18n.t("shortcuts.cancel")).clicked() {
@@ -777,10 +750,8 @@ impl LabApp {
 
     fn handle_shortcuts(&mut self, ctx: &Context) {
         // Handle shortcuts through ShortcutManager
-        if let Some(action) = self
-            .state
-            .shortcut_manager
-            .handle_input(ctx, self.state.editing_state.mode)
+        if let Some(action) =
+            self.state.shortcut_manager.handle_input(ctx, self.state.editing_state.mode)
         {
             self.handle_shortcut_action(action, ctx);
         }
@@ -1129,12 +1100,8 @@ impl LabApp {
             return;
         }
 
-        let pending: Vec<_> = self
-            .state
-            .pending_draw_clicks
-            .drain(..)
-            .map(|item| item.position)
-            .collect();
+        let pending: Vec<_> =
+            self.state.pending_draw_clicks.drain(..).map(|item| item.position).collect();
         for position in pending {
             DrawingTools::handle_click(&mut self.state, position);
         }
@@ -1159,9 +1126,7 @@ impl LabApp {
 
         if self.state.draw_target == crate::state::DrawTarget::Roi {
             if let Some(label) = &mut self.state.current_annotation {
-                label
-                    .rois
-                    .push(lab_core::Polygon::from(self.state.temp_points.clone()));
+                label.rois.push(lab_core::Polygon::from(self.state.temp_points.clone()));
                 lab_core::touch(label);
                 self.state.has_unsaved_changes = true;
                 let roi_id = crate::state::roi_id_from_index(label.rois.len() - 1);
@@ -1183,12 +1148,8 @@ impl LabApp {
         };
 
         // Get default category
-        let default_category = self
-            .state
-            .get_meta()
-            .and_then(|m| m.categories.first())
-            .map(|c| c.id)
-            .unwrap_or(0);
+        let default_category =
+            self.state.get_meta().and_then(|m| m.categories.first()).map(|c| c.id).unwrap_or(0);
 
         // Create new object
         let new_object = lab_core::Object {
@@ -1216,9 +1177,8 @@ impl LabApp {
 
     fn open_project_dialog(&mut self) {
         // Use rfd to open a folder picker dialog
-        if let Some(path) = rfd::FileDialog::new()
-            .set_title("Select Project Directory")
-            .pick_folder()
+        if let Some(path) =
+            rfd::FileDialog::new().set_title("Select Project Directory").pick_folder()
         {
             log::info!("Selected project directory: {:?}", path);
 
@@ -1242,10 +1202,9 @@ impl LabApp {
             return;
         }
 
-        if let (Some(label), Some(obj_id)) = (
-            &mut self.state.current_annotation,
-            self.state.selected_object_id,
-        ) {
+        if let (Some(label), Some(obj_id)) =
+            (&mut self.state.current_annotation, self.state.selected_object_id)
+        {
             let mut updated = false;
             Self::with_polygon_mut(label, obj_id, |polygon| {
                 if let Some((min, max)) = crate::geometry::bounding_box(polygon) {
@@ -1270,10 +1229,9 @@ impl LabApp {
             return;
         }
 
-        if let (Some(label), Some(obj_id)) = (
-            &mut self.state.current_annotation,
-            self.state.selected_object_id,
-        ) {
+        if let (Some(label), Some(obj_id)) =
+            (&mut self.state.current_annotation, self.state.selected_object_id)
+        {
             let mut updated = false;
             Self::with_polygon_mut(label, obj_id, |polygon| {
                 if crate::geometry::fix_self_intersections(polygon) {
@@ -1293,10 +1251,9 @@ impl LabApp {
             return;
         }
 
-        if let (Some(label), Some(obj_id)) = (
-            &mut self.state.current_annotation,
-            self.state.selected_object_id,
-        ) {
+        if let (Some(label), Some(obj_id)) =
+            (&mut self.state.current_annotation, self.state.selected_object_id)
+        {
             Self::with_polygon_mut(label, obj_id, |polygon| {
                 if let Some((min, max)) = crate::geometry::bounding_box(polygon) {
                     let center_x = (min.x + max.x) / 2.0;

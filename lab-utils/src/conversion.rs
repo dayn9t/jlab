@@ -31,9 +31,7 @@ pub fn export_annotation<P: AsRef<Path>>(
             exporter.export_annotation(annotation, meta, image_path, image_width, image_height)?
         }
         ExportFormat::Coco => {
-            return Err(lab_core::Error::Export(
-                "COCO format requires batch export".to_string(),
-            ));
+            return Err(lab_core::Error::Export("COCO format requires batch export".to_string()));
         }
     };
 
@@ -83,9 +81,7 @@ mod tests {
                 auto_save: true,
                 vertex_radius: 10.0,
             },
-            roi: RoiConfig {
-                color: "#800080".to_string(),
-            },
+            roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![CatDef {
                 id: 0,
                 name: "person".to_string(),

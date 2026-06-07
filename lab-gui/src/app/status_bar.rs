@@ -68,11 +68,8 @@ impl LabApp {
                             self.state.i18n.t("sidebar.auto_save_off")
                         )
                     };
-                    let auto_save_color = if auto_save {
-                        egui::Color32::GREEN
-                    } else {
-                        egui::Color32::GRAY
-                    };
+                    let auto_save_color =
+                        if auto_save { egui::Color32::GREEN } else { egui::Color32::GRAY };
                     Self::status_add_colored(ui, &mut first, auto_save_color, auto_save_text);
                 }
 

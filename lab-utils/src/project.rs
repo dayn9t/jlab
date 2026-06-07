@@ -34,10 +34,7 @@ impl Project {
 
     /// Get the path to a specific annotation file
     pub fn annotation_path(&self, image_name: &str) -> PathBuf {
-        let stem = Path::new(image_name)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or(image_name);
+        let stem = Path::new(image_name).file_stem().and_then(|s| s.to_str()).unwrap_or(image_name);
 
         self.labels_dir().join(format!("{}.yaml", stem))
     }
@@ -114,11 +111,7 @@ impl Project {
             }
         }
 
-        Ok(ProgressStats {
-            total,
-            annotated,
-            remaining: total - annotated,
-        })
+        Ok(ProgressStats { total, annotated, remaining: total - annotated })
     }
 }
 

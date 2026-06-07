@@ -53,24 +53,12 @@ pub fn touch(label: &mut Label) {
 
 /// 返回下一个可用的 Object ID。
 pub fn next_object_id(label: &Label) -> i32 {
-    label
-        .objects
-        .iter()
-        .map(|obj| obj.id)
-        .max()
-        .map(|max_id| max_id + 1)
-        .unwrap_or(0)
+    label.objects.iter().map(|obj| obj.id).max().map(|max_id| max_id + 1).unwrap_or(0)
 }
 
 /// 创建一个新 Object（便捷构造）。
 pub fn new_object(id: i32, category: i32, polygon: Polygon<f32>) -> Object {
-    Object {
-        id,
-        category,
-        confidence: 1.0,
-        polygon,
-        properties: Vec::new(),
-    }
+    Object { id, category, confidence: 1.0, polygon, properties: Vec::new() }
 }
 
 /// 为 Object 设置单值属性（查找并替换，或追加）。
@@ -79,11 +67,7 @@ pub fn set_object_property(object: &mut Object, property_id: i32, value: i32, co
         entry.value = value;
         entry.confidence = confidence;
     } else {
-        object.properties.push(PropertyEntry {
-            id: property_id,
-            value,
-            confidence,
-        });
+        object.properties.push(PropertyEntry { id: property_id, value, confidence });
     }
 }
 

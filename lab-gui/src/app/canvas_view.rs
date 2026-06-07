@@ -103,10 +103,7 @@ impl LabApp {
                 {
                     self.state
                         .pending_draw_clicks
-                        .push(crate::state::PendingDrawClick {
-                            position: clicked_pos,
-                            time: now,
-                        });
+                        .push(crate::state::PendingDrawClick { position: clicked_pos, time: now });
                 }
             }
 
