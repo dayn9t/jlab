@@ -1,5 +1,5 @@
 use crate::shortcuts::ShortcutManager;
-use lab_core::{Annotation, Meta, Object, Point};
+use lab_core::{Label, LabelMeta, Object, Point, Polygon};
 use lab_utils::Project;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -70,7 +70,7 @@ impl EditingState {
 }
 
 pub struct PendingDrawClick {
-    pub position: Point,
+    pub position: Point<f32>,
     pub time: f64,
 }
 
@@ -86,7 +86,7 @@ pub struct AppState {
     pub current_image_index: usize,
 
     /// Current annotation
-    pub current_annotation: Option<Annotation>,
+    pub current_annotation: Option<Label>,
 
     /// Loaded image data
     pub current_image: Option<ImageData>,
@@ -104,7 +104,7 @@ pub struct AppState {
     pub selected_object_id: Option<i32>,
 
     /// Temporary points (for drawing new shapes)
-    pub temp_points: Vec<Point>,
+    pub temp_points: Vec<Point<f32>>,
 
     /// Pending single-clicks in Drawing mode (delayed for double-click detection)
     pub pending_draw_clicks: Vec<PendingDrawClick>,
@@ -113,7 +113,7 @@ pub struct AppState {
     pub clipboard_objects: Vec<Object>,
 
     /// Clipboard ROIs for copy/paste operations
-    pub clipboard_rois: Vec<Vec<Point>>,
+    pub clipboard_rois: Vec<Polygon<f32>>,
 
     /// Editing state
     pub editing_state: EditingState,
@@ -316,7 +316,7 @@ impl AppState {
 
                 if self.current_annotation.is_none() {
                     // Create new annotation
-                    self.current_annotation = Some(Annotation::new("jlab-gui"));
+                    self.current_annotation = Some(lab_core::new_label("jlab-gui"));
                 }
             }
         }
@@ -387,11 +387,11 @@ impl AppState {
 
     /// Save current annotation
     pub fn save_annotation(&mut self) -> anyhow::Result<()> {
-        if let (Some(project), Some(annotation), Some(image)) =
+        if let (Some(project), Some(label), Some(image)) =
             (&self.project, &self.current_annotation, &self.current_image)
         {
             if let Some(filename) = image.path.file_name().and_then(|s| s.to_str()) {
-                project.save_annotation(filename, annotation)?;
+                project.save_annotation(filename, label)?;
                 self.has_unsaved_changes = false;
             }
         }
@@ -403,27 +403,27 @@ impl AppState {
         self.clipboard_objects.clear();
         self.clipboard_rois.clear();
 
-        let annotation = match &self.current_annotation {
-            Some(annotation) => annotation,
+        let label = match &self.current_annotation {
+            Some(label) => label,
             None => return,
         };
 
         if let Some(selected_id) = self.selected_object_id {
             if let Some(roi_index) = roi_index_from_id(selected_id) {
-                if let Some(roi_points) = annotation.rois.get(roi_index) {
-                    self.clipboard_rois.push(roi_points.clone());
+                if let Some(roi) = label.rois.get(roi_index) {
+                    self.clipboard_rois.push(roi.clone());
                     log::info!("Copied ROI #{} to clipboard", roi_index);
                     return;
                 }
-            } else if let Some(obj) = annotation.objects.iter().find(|o| o.id == selected_id) {
+            } else if let Some(obj) = label.objects.iter().find(|o| o.id == selected_id) {
                 self.clipboard_objects.push(obj.clone());
                 log::info!("Copied object #{} to clipboard", obj.id);
                 return;
             }
         }
 
-        self.clipboard_objects = annotation.objects.clone();
-        self.clipboard_rois = annotation.rois.clone();
+        self.clipboard_objects = label.objects.clone();
+        self.clipboard_rois = label.rois.clone();
         log::info!(
             "Copied all objects ({}) and ROIs ({}) to clipboard",
             self.clipboard_objects.len(),
@@ -433,8 +433,8 @@ impl AppState {
 
     /// Paste objects/ROIs from clipboard
     pub fn paste_from_clipboard(&mut self) {
-        let annotation = match &mut self.current_annotation {
-            Some(annotation) => annotation,
+        let label = match &mut self.current_annotation {
+            Some(label) => label,
             None => return,
         };
 
@@ -445,30 +445,41 @@ impl AppState {
         let offset = 0.05;
         let mut last_object_id = None;
         if !self.clipboard_objects.is_empty() {
-            let mut next_id = annotation.objects.iter().map(|o| o.id).max().unwrap_or(-1) + 1;
+            let mut next_id = label.objects.iter().map(|o| o.id).max().unwrap_or(-1) + 1;
             for obj in &self.clipboard_objects {
                 let mut new_obj = obj.clone();
                 new_obj.id = next_id;
                 next_id += 1;
-                new_obj.polygon = new_obj
-                    .polygon
-                    .iter()
-                    .map(|p| Point::new((p.x + offset).min(1.0), (p.y + offset).min(1.0)))
-                    .collect();
-                annotation.objects.push(new_obj);
+                new_obj.polygon = Polygon::from(
+                    new_obj
+                        .polygon
+                        .0
+                        .iter()
+                        .map(|p| Point {
+                            x: (p.x + offset).min(1.0),
+                            y: (p.y + offset).min(1.0),
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                label.objects.push(new_obj);
                 last_object_id = Some(next_id - 1);
             }
         }
 
         let mut last_roi_id = None;
         if !self.clipboard_rois.is_empty() {
-            for roi_points in &self.clipboard_rois {
-                let new_roi: Vec<Point> = roi_points
-                    .iter()
-                    .map(|p| Point::new((p.x + offset).min(1.0), (p.y + offset).min(1.0)))
-                    .collect();
-                annotation.rois.push(new_roi);
-                last_roi_id = Some(roi_id_from_index(annotation.rois.len() - 1));
+            for roi in &self.clipboard_rois {
+                let new_roi = Polygon::from(
+                    roi.0
+                        .iter()
+                        .map(|p| Point {
+                            x: (p.x + offset).min(1.0),
+                            y: (p.y + offset).min(1.0),
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                label.rois.push(new_roi);
+                last_roi_id = Some(roi_id_from_index(label.rois.len() - 1));
             }
         }
 
@@ -485,19 +496,19 @@ impl AppState {
 
     /// Delete selected object
     pub fn delete_selected(&mut self) {
-        if let (Some(annotation), Some(selected_id)) =
+        if let (Some(label), Some(selected_id)) =
             (&mut self.current_annotation, self.selected_object_id)
         {
             if let Some(roi_index) = roi_index_from_id(selected_id) {
-                if roi_index < annotation.rois.len() {
-                    annotation.rois.remove(roi_index);
+                if roi_index < label.rois.len() {
+                    label.rois.remove(roi_index);
                     self.selected_object_id = None;
                     self.editing_state.selected_vertex = None;
                     self.has_unsaved_changes = true;
                     log::info!("Deleted ROI #{}", roi_index);
                 }
-            } else if let Some(pos) = annotation.objects.iter().position(|o| o.id == selected_id) {
-                annotation.objects.remove(pos);
+            } else if let Some(pos) = label.objects.iter().position(|o| o.id == selected_id) {
+                label.objects.remove(pos);
                 self.selected_object_id = None;
                 self.editing_state.selected_vertex = None;
                 self.has_unsaved_changes = true;
@@ -507,7 +518,7 @@ impl AppState {
     }
 
     /// Get current metadata
-    pub fn get_meta(&self) -> Option<&Meta> {
+    pub fn get_meta(&self) -> Option<&LabelMeta> {
         self.project.as_ref().map(|p| &p.meta)
     }
 
@@ -699,7 +710,11 @@ impl AppState {
             Err(_) => return (None, None, None),
         };
 
-        (settings.font_size, settings.ui_scale, settings.show_scrollbar)
+        (
+            settings.font_size,
+            settings.ui_scale,
+            settings.show_scrollbar,
+        )
     }
 
     /// Save UI settings to config file

@@ -6,18 +6,18 @@ pub struct DrawingTools;
 
 impl DrawingTools {
     /// Handle canvas click for drawing
-    pub fn handle_click(state: &mut AppState, clicked_pos: Point) {
+    pub fn handle_click(state: &mut AppState, clicked_pos: Point<f32>) {
         state.temp_points.push(clicked_pos);
     }
 
     /// Change category of selected object
     pub fn change_selected_category(state: &mut AppState, category_id: i32) {
-        if let (Some(annotation), Some(obj_id)) =
+        if let (Some(label), Some(obj_id)) =
             (&mut state.current_annotation, state.selected_object_id)
         {
-            if let Some(obj) = annotation.find_object_mut(obj_id) {
+            if let Some(obj) = lab_core::find_object_mut(label, obj_id) {
                 obj.category = category_id;
-                annotation.touch();
+                lab_core::touch(label);
                 state.has_unsaved_changes = true;
                 log::info!("Changed object #{} category to {}", obj_id, category_id);
             }

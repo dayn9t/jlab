@@ -1,4 +1,4 @@
-use crate::{Annotation, Error, Meta, Result};
+use crate::{Error, Label, LabelMeta, Result};
 
 pub mod coco;
 pub mod voc;
@@ -20,8 +20,8 @@ pub trait Exporter {
     /// Export a single annotation
     fn export_annotation(
         &self,
-        annotation: &Annotation,
-        meta: &Meta,
+        annotation: &Label,
+        meta: &LabelMeta,
         image_path: &str,
         image_width: u32,
         image_height: u32,
@@ -30,8 +30,8 @@ pub trait Exporter {
     /// Export multiple annotations (for formats like COCO that support batch export)
     fn export_batch(
         &self,
-        _annotations: &[(String, Annotation, u32, u32)], // (image_path, annotation, width, height)
-        _meta: &Meta,
+        _annotations: &[(String, Label, u32, u32)], // (image_path, annotation, width, height)
+        _meta: &LabelMeta,
     ) -> Result<String> {
         // Default implementation: not supported
         Err(Error::Export(

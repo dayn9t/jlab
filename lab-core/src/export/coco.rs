@@ -1,5 +1,5 @@
 use crate::export::Exporter;
-use crate::{Annotation, Meta, Result};
+use crate::{Label, LabelMeta, Result};
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 
@@ -62,8 +62,8 @@ struct CocoCategory {
 impl Exporter for CocoExporter {
     fn export_annotation(
         &self,
-        _annotation: &Annotation,
-        _meta: &Meta,
+        _annotation: &Label,
+        _meta: &LabelMeta,
         _image_path: &str,
         _image_width: u32,
         _image_height: u32,
@@ -75,10 +75,10 @@ impl Exporter for CocoExporter {
 
     fn export_batch(
         &self,
-        annotations: &[(String, Annotation, u32, u32)],
-        meta: &Meta,
+        annotations: &[(String, Label, u32, u32)],
+        meta: &LabelMeta,
     ) -> Result<String> {
-        let now = chrono::Utc::now();
+        let now = chrono::Local::now();
 
         let info = CocoInfo {
             description: meta.description.clone(),
@@ -118,7 +118,7 @@ impl Exporter for CocoExporter {
             });
 
             for obj in &annotation.objects {
-                if obj.polygon.is_empty() {
+                if obj.polygon.0.is_empty() {
                     continue;
                 }
 
@@ -128,7 +128,7 @@ impl Exporter for CocoExporter {
                 let mut max_x = f32::MIN;
                 let mut max_y = f32::MIN;
 
-                for point in &obj.polygon {
+                for point in &obj.polygon.0 {
                     min_x = min_x.min(point.x);
                     min_y = min_y.min(point.y);
                     max_x = max_x.max(point.x);
@@ -143,7 +143,7 @@ impl Exporter for CocoExporter {
 
                 // Convert polygon to COCO segmentation format
                 let mut segmentation = Vec::new();
-                for point in &obj.polygon {
+                for point in &obj.polygon.0 {
                     segmentation.push(point.x * *width as f32);
                     segmentation.push(point.y * *height as f32);
                 }
@@ -190,27 +190,26 @@ impl Exporter for CocoExporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::annotation::Object;
-    use crate::geometry::Point;
-    use crate::meta::{Category, RoiConfig, ShapeConfig};
+    use crate::annotation::{add_object, new_label, new_object};
+    use crate::{CatDef, LabelMeta, Point, Polygon, RoiConfig, ShapeConfig};
 
     #[test]
     fn test_coco_batch_export() {
-        let mut annotation = Annotation::new("test");
+        let mut label = new_label("test");
 
-        let obj = Object::new(
+        let obj = new_object(
             0,
             0,
-            vec![
-                Point::new(0.1, 0.1),
-                Point::new(0.5, 0.1),
-                Point::new(0.5, 0.5),
-                Point::new(0.1, 0.5),
-            ],
+            Polygon::from(vec![
+                Point { x: 0.1, y: 0.1 },
+                Point { x: 0.5, y: 0.1 },
+                Point { x: 0.5, y: 0.5 },
+                Point { x: 0.1, y: 0.5 },
+            ]),
         );
-        annotation.add_object(obj);
+        add_object(&mut label, obj);
 
-        let meta = Meta {
+        let meta = LabelMeta {
             id: 1,
             name: "TestDataset".to_string(),
             description: "Test COCO export".to_string(),
@@ -223,7 +222,7 @@ mod tests {
             roi: RoiConfig {
                 color: "#800080".to_string(),
             },
-            categories: vec![Category {
+            categories: vec![CatDef {
                 id: 0,
                 name: "person".to_string(),
                 description: "Person".to_string(),
@@ -235,7 +234,7 @@ mod tests {
             property_special_values: vec![],
         };
 
-        let batch = vec![("test.jpg".to_string(), annotation, 1000, 1000)];
+        let batch = vec![("test.jpg".to_string(), label, 1000, 1000)];
 
         let exporter = CocoExporter;
         let result = exporter.export_batch(&batch, &meta).unwrap();

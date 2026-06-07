@@ -1,7 +1,7 @@
 use super::LabApp;
 use anyhow::Context;
 use image::GenericImageView;
-use lab_core::{Annotation, Object, Point};
+use lab_core::{Label, Object, Point, Polygon};
 use lab_utils::conversion::{export_annotation, export_coco_batch, ExportFormat};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -179,7 +179,7 @@ impl LabApp {
                 }
 
                 let coco_path = output_root.join("annotations.json");
-                let coco_items: Vec<(String, Annotation, u32, u32)> = export_items
+                let coco_items: Vec<(String, Label, u32, u32)> = export_items
                     .iter()
                     .map(|item| {
                         (
@@ -209,7 +209,7 @@ impl LabApp {
 struct ImportedImage {
     source_path: PathBuf,
     file_name: String,
-    annotation: Option<Annotation>,
+    annotation: Option<Label>,
 }
 
 struct ExportItem {
@@ -218,7 +218,7 @@ struct ExportItem {
     stem: String,
     width: u32,
     height: u32,
-    annotation: Annotation,
+    annotation: Label,
 }
 
 impl LabApp {
@@ -262,7 +262,7 @@ impl LabApp {
 
             let annotation = project
                 .load_annotation(&file_name)?
-                .unwrap_or_else(|| Annotation::new("export"));
+                .unwrap_or_else(|| lab_core::new_label("export"));
 
             items.push(ExportItem {
                 image_path,
@@ -317,7 +317,7 @@ impl LabApp {
     fn import_from_yolo(
         &self,
         root: &Path,
-        meta: &lab_core::Meta,
+        meta: &lab_core::LabelMeta,
     ) -> anyhow::Result<Vec<ImportedImage>> {
         let images_dir = root.join("images");
         let labels_dir = root.join("labels");
@@ -357,7 +357,7 @@ impl LabApp {
                         Ok(val) => val,
                         Err(_) => continue,
                     };
-                    if meta.find_category(class_id).is_none() {
+                    if lab_core::find_category(meta, class_id).is_none() {
                         log::warn!("Unknown category id {} in {:?}", class_id, label_path);
                         continue;
                     }
@@ -383,14 +383,14 @@ impl LabApp {
                     let xmax = x_center + width / 2.0;
                     let ymax = y_center + height / 2.0;
                     let polygon = rect_polygon(xmin, ymin, xmax, ymax);
-                    if polygon.len() < 3 {
+                    if !polygon.is_valid() {
                         continue;
                     }
-                    objects.push(Object::new(0, class_id, polygon));
+                    objects.push(lab_core::new_object(0, class_id, polygon));
                 }
             }
 
-            let annotation = build_annotation(objects, "import");
+            let annotation = build_label(objects, "import");
             imported.push(ImportedImage {
                 source_path: image_path,
                 file_name,
@@ -404,7 +404,7 @@ impl LabApp {
     fn import_from_voc(
         &self,
         root: &Path,
-        meta: &lab_core::Meta,
+        meta: &lab_core::LabelMeta,
     ) -> anyhow::Result<Vec<ImportedImage>> {
         let images_dir = root.join("JPEGImages");
         let labels_dir = root.join("Annotations");
@@ -452,15 +452,15 @@ impl LabApp {
                         let xmax = voc_obj.xmax / width;
                         let ymax = voc_obj.ymax / height;
                         let polygon = rect_polygon(xmin, ymin, xmax, ymax);
-                        if polygon.len() < 3 {
+                        if !polygon.is_valid() {
                             continue;
                         }
-                        objects.push(Object::new(0, category_id, polygon));
+                        objects.push(lab_core::new_object(0, category_id, polygon));
                     }
                 }
             }
 
-            let annotation = build_annotation(objects, "import");
+            let annotation = build_label(objects, "import");
             imported.push(ImportedImage {
                 source_path: image_path,
                 file_name,
@@ -475,14 +475,14 @@ impl LabApp {
         &self,
         json_path: &Path,
         images_dir: &Path,
-        meta: &lab_core::Meta,
+        meta: &lab_core::LabelMeta,
     ) -> anyhow::Result<Vec<ImportedImage>> {
         let content = fs::read_to_string(json_path)?;
         let dataset: CocoDataset = serde_json::from_str(&content)?;
 
         let mut category_map = HashMap::new();
         for cat in &dataset.categories {
-            if meta.find_category(cat.id).is_some() {
+            if lab_core::find_category(meta, cat.id).is_some() {
                 category_map.insert(cat.id, cat.id);
             } else if let Some(id) = find_category_id_by_name(meta, &cat.name) {
                 category_map.insert(cat.id, id);
@@ -539,14 +539,14 @@ impl LabApp {
                         bbox_to_polygon(&ann.bbox, image.width, image.height)
                     };
 
-                    if polygon.len() < 3 {
+                    if !polygon.is_valid() {
                         continue;
                     }
-                    objects.push(Object::new(0, category_id, polygon));
+                    objects.push(lab_core::new_object(0, category_id, polygon));
                 }
             }
 
-            let annotation = build_annotation(objects, "import");
+            let annotation = build_label(objects, "import");
             imported.push(ImportedImage {
                 source_path,
                 file_name,
@@ -560,7 +560,7 @@ impl LabApp {
     fn import_from_labelme(
         &self,
         root: &Path,
-        meta: &lab_core::Meta,
+        meta: &lab_core::LabelMeta,
     ) -> anyhow::Result<Vec<ImportedImage>> {
         let mut imported = Vec::new();
         for entry in fs::read_dir(root)? {
@@ -607,13 +607,13 @@ impl LabApp {
 
                 let polygon =
                     labelme_shape_to_polygon(&shape, labelme.image_width, labelme.image_height);
-                if polygon.len() < 3 {
+                if polygon.0.len() < 3 {
                     continue;
                 }
-                objects.push(Object::new(0, category_id, polygon));
+                objects.push(lab_core::new_object(0, category_id, polygon));
             }
 
-            let annotation = build_annotation(objects, "import");
+            let annotation = build_label(objects, "import");
             imported.push(ImportedImage {
                 source_path,
                 file_name,
@@ -630,19 +630,19 @@ impl LabApp {
         &self,
         output_path: &Path,
         item: &ExportItem,
-        meta: &lab_core::Meta,
+        meta: &lab_core::LabelMeta,
     ) -> anyhow::Result<()> {
         let mut shapes = Vec::new();
         for obj in &item.annotation.objects {
-            if obj.polygon.len() < 3 {
+            if obj.polygon.0.len() < 3 {
                 continue;
             }
-            let label = meta
-                .find_category(obj.category)
+            let label = lab_core::find_category(meta, obj.category)
                 .map(|c| c.name.clone())
                 .unwrap_or_else(|| "unknown".to_string());
             let points = obj
                 .polygon
+                .0
                 .iter()
                 .map(|point| {
                     vec![
@@ -698,7 +698,7 @@ fn list_images_in_dir(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     Ok(images)
 }
 
-fn rect_polygon(xmin: f32, ymin: f32, xmax: f32, ymax: f32) -> Vec<Point> {
+fn rect_polygon(xmin: f32, ymin: f32, xmax: f32, ymax: f32) -> Polygon<f32> {
     let mut xmin = clamp01(xmin);
     let mut ymin = clamp01(ymin);
     let mut xmax = clamp01(xmax);
@@ -710,33 +710,33 @@ fn rect_polygon(xmin: f32, ymin: f32, xmax: f32, ymax: f32) -> Vec<Point> {
         std::mem::swap(&mut ymin, &mut ymax);
     }
     if xmax <= xmin || ymax <= ymin {
-        return Vec::new();
+        return Polygon::empty();
     }
-    vec![
-        Point::new(xmin, ymin),
-        Point::new(xmax, ymin),
-        Point::new(xmax, ymax),
-        Point::new(xmin, ymax),
-    ]
+    Polygon::from(vec![
+        Point { x: xmin, y: ymin },
+        Point { x: xmax, y: ymin },
+        Point { x: xmax, y: ymax },
+        Point { x: xmin, y: ymax },
+    ])
 }
 
 fn clamp01(value: f32) -> f32 {
     value.max(0.0).min(1.0)
 }
 
-fn build_annotation(objects: Vec<Object>, user_agent: &str) -> Option<Annotation> {
+fn build_label(objects: Vec<Object>, user_agent: &str) -> Option<Label> {
     if objects.is_empty() {
         return None;
     }
-    let mut annotation = Annotation::new(user_agent);
+    let mut label = lab_core::new_label(user_agent);
     for (idx, mut obj) in objects.into_iter().enumerate() {
         obj.id = idx as i32;
-        annotation.add_object(obj);
+        lab_core::add_object(&mut label, obj);
     }
-    Some(annotation)
+    Some(label)
 }
 
-fn find_category_id_by_name(meta: &lab_core::Meta, name: &str) -> Option<i32> {
+fn find_category_id_by_name(meta: &lab_core::LabelMeta, name: &str) -> Option<i32> {
     meta.categories
         .iter()
         .find(|cat| cat.name == name)
@@ -805,9 +805,9 @@ fn extract_tag_value(content: &str, tag: &str) -> Option<String> {
     Some(content[start..end].trim().to_string())
 }
 
-fn bbox_to_polygon(bbox: &[f32], width: u32, height: u32) -> Vec<Point> {
+fn bbox_to_polygon(bbox: &[f32], width: u32, height: u32) -> Polygon<f32> {
     if bbox.len() < 4 || width == 0 || height == 0 {
-        return Vec::new();
+        return Polygon::empty();
     }
     let x = bbox[0] / width as f32;
     let y = bbox[1] / height as f32;
@@ -820,7 +820,7 @@ fn coco_segmentation_to_polygon(
     segmentation: &serde_json::Value,
     width: u32,
     height: u32,
-) -> Option<Vec<Point>> {
+) -> Option<Polygon<f32>> {
     let coords = match segmentation {
         serde_json::Value::Array(items) => {
             if items.is_empty() {
@@ -841,22 +841,22 @@ fn coco_segmentation_to_polygon(
         if width == 0 || height == 0 {
             break;
         }
-        points.push(Point::new(
-            clamp01(x as f32 / width as f32),
-            clamp01(y as f32 / height as f32),
-        ));
+        points.push(Point {
+            x: clamp01(x as f32 / width as f32),
+            y: clamp01(y as f32 / height as f32),
+        });
     }
 
     if points.len() >= 3 {
-        Some(points)
+        Some(Polygon::from(points))
     } else {
         None
     }
 }
 
-fn labelme_shape_to_polygon(shape: &LabelMeShape, width: u32, height: u32) -> Vec<Point> {
+fn labelme_shape_to_polygon(shape: &LabelMeShape, width: u32, height: u32) -> Polygon<f32> {
     if width == 0 || height == 0 {
-        return Vec::new();
+        return Polygon::empty();
     }
     let shape_type = shape
         .shape_type
@@ -864,12 +864,12 @@ fn labelme_shape_to_polygon(shape: &LabelMeShape, width: u32, height: u32) -> Ve
         .unwrap_or("polygon")
         .to_lowercase();
 
-    let points = match shape_type.as_str() {
+    let polygon = match shape_type.as_str() {
         "rectangle" if shape.points.len() >= 2 => {
             let p1 = &shape.points[0];
             let p2 = &shape.points[1];
             if p1.len() < 2 || p2.len() < 2 {
-                return Vec::new();
+                return Polygon::empty();
             }
             let x1 = p1[0] as f32 / width as f32;
             let y1 = p1[1] as f32 / height as f32;
@@ -877,23 +877,25 @@ fn labelme_shape_to_polygon(shape: &LabelMeShape, width: u32, height: u32) -> Ve
             let y2 = p2[1] as f32 / height as f32;
             rect_polygon(x1, y1, x2, y2)
         }
-        _ => shape
-            .points
-            .iter()
-            .filter_map(|p| {
-                if p.len() < 2 {
-                    None
-                } else {
-                    Some(Point::new(
-                        clamp01(p[0] as f32 / width as f32),
-                        clamp01(p[1] as f32 / height as f32),
-                    ))
-                }
-            })
-            .collect(),
+        _ => Polygon::from(
+            shape
+                .points
+                .iter()
+                .filter_map(|p| {
+                    if p.len() < 2 {
+                        None
+                    } else {
+                        Some(Point {
+                            x: clamp01(p[0] as f32 / width as f32),
+                            y: clamp01(p[1] as f32 / height as f32),
+                        })
+                    }
+                })
+                .collect::<Vec<_>>(),
+        ),
     };
 
-    points
+    polygon
 }
 
 fn find_image_by_stem(root: &Path, stem: &str) -> anyhow::Result<String> {

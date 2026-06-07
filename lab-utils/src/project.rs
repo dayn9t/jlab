@@ -1,4 +1,4 @@
-use lab_core::{Annotation, Meta, Result};
+use lab_core::{Label, LabelMeta, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -8,7 +8,7 @@ pub struct Project {
     pub root: PathBuf,
 
     /// Project metadata
-    pub meta: Meta,
+    pub meta: LabelMeta,
 }
 
 impl Project {
@@ -43,7 +43,7 @@ impl Project {
     }
 
     /// Load an annotation for a specific image
-    pub fn load_annotation(&self, image_name: &str) -> Result<Option<Annotation>> {
+    pub fn load_annotation(&self, image_name: &str) -> Result<Option<Label>> {
         let path = self.annotation_path(image_name);
 
         if !path.exists() {
@@ -55,7 +55,7 @@ impl Project {
     }
 
     /// Save an annotation for a specific image
-    pub fn save_annotation(&self, image_name: &str, annotation: &Annotation) -> Result<()> {
+    pub fn save_annotation(&self, image_name: &str, annotation: &Label) -> Result<()> {
         let path = self.annotation_path(image_name);
 
         // Ensure the labels directory exists

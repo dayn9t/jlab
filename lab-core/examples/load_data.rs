@@ -5,7 +5,6 @@ fn main() {
     println!("Loading meta.yaml...");
     match load_meta("label_root/meta.yaml") {
         Ok(meta) => {
-            println!("✓ Meta loaded successfully!");
             println!("  ID: {}", meta.id);
             println!("  Name: {}", meta.name);
             println!("  Description: {}", meta.description);
@@ -13,7 +12,7 @@ fn main() {
             println!("  Property types: {}", meta.property_types.len());
         }
         Err(e) => {
-            eprintln!("✗ Failed to load meta: {}", e);
+            eprintln!("Failed to load meta: {}", e);
         }
     }
 
@@ -22,25 +21,24 @@ fn main() {
     // Load annotation
     println!("Loading labels/0001.yaml...");
     match load_annotation("label_root/labels/0001.yaml") {
-        Ok(annotation) => {
-            println!("✓ Annotation loaded successfully!");
-            println!("  Version: {}", annotation.version);
-            println!("  User agent: {}", annotation.user_agent);
-            println!("  Objects: {}", annotation.objects.len());
-            println!("  ROI count: {}", annotation.rois.len());
+        Ok(label) => {
+            println!("  Version: {}", label.version);
+            println!("  User agent: {}", label.user_agent);
+            println!("  Objects: {}", label.objects.len());
+            println!("  ROI count: {}", label.rois.len());
 
-            for (i, obj) in annotation.objects.iter().enumerate() {
+            for (i, obj) in label.objects.iter().enumerate() {
                 println!(
                     "  Object {}: category={}, points={}, properties={}",
                     i,
                     obj.category,
-                    obj.polygon.len(),
+                    obj.polygon.0.len(),
                     obj.properties.len()
                 );
             }
         }
         Err(e) => {
-            eprintln!("✗ Failed to load annotation: {}", e);
+            eprintln!("Failed to load annotation: {}", e);
         }
     }
 }

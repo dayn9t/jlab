@@ -33,9 +33,7 @@ impl LabApp {
                         ui.separator();
                         let recent_menu_response = ui.menu_button(recent_label.clone(), |ui| {
                             for project_path in self.state.recent_projects.clone() {
-                                let path = project_path
-                                    .to_str()
-                                    .unwrap_or("Unknown");
+                                let path = project_path.to_str().unwrap_or("Unknown");
                                 let recent_response = ui.button(path);
                                 Self::update_status_hint(
                                     status_hint,

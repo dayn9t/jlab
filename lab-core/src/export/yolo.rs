@@ -1,5 +1,5 @@
 use crate::export::Exporter;
-use crate::{Annotation, Meta, Result};
+use crate::{Label, LabelMeta, Result};
 
 /// YOLO format exporter
 ///
@@ -10,8 +10,8 @@ pub struct YoloExporter;
 impl Exporter for YoloExporter {
     fn export_annotation(
         &self,
-        annotation: &Annotation,
-        _meta: &Meta,
+        annotation: &Label,
+        _meta: &LabelMeta,
         _image_path: &str,
         _image_width: u32,
         _image_height: u32,
@@ -19,7 +19,7 @@ impl Exporter for YoloExporter {
         let mut lines = Vec::new();
 
         for obj in &annotation.objects {
-            if obj.polygon.is_empty() {
+            if obj.polygon.0.is_empty() {
                 continue;
             }
 
@@ -29,7 +29,7 @@ impl Exporter for YoloExporter {
             let mut max_x = f32::MIN;
             let mut max_y = f32::MIN;
 
-            for point in &obj.polygon {
+            for point in &obj.polygon.0 {
                 min_x = min_x.min(point.x);
                 min_y = min_y.min(point.y);
                 max_x = max_x.max(point.x);
@@ -55,37 +55,37 @@ impl Exporter for YoloExporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::annotation::Object;
-    use crate::geometry::Point;
+    use crate::annotation::{add_object, new_label, new_object};
+    use crate::{LabelMeta, Point, Polygon, RoiConfig, ShapeConfig};
 
     #[test]
     fn test_yolo_export() {
-        let mut annotation = Annotation::new("test");
+        let mut label = new_label("test");
 
         // Create a simple polygon object
-        let obj = Object::new(
+        let obj = new_object(
             0,
             0,
-            vec![
-                Point::new(0.1, 0.1),
-                Point::new(0.5, 0.1),
-                Point::new(0.5, 0.5),
-                Point::new(0.1, 0.5),
-            ],
+            Polygon::from(vec![
+                Point { x: 0.1, y: 0.1 },
+                Point { x: 0.5, y: 0.1 },
+                Point { x: 0.5, y: 0.5 },
+                Point { x: 0.1, y: 0.5 },
+            ]),
         );
-        annotation.add_object(obj);
+        add_object(&mut label, obj);
 
-        let meta = Meta {
+        let meta = LabelMeta {
             id: 1,
             name: "test".to_string(),
             description: "test".to_string(),
-            shape: crate::meta::ShapeConfig {
+            shape: ShapeConfig {
                 title_style: 1,
                 thickness: 2,
                 auto_save: true,
                 vertex_radius: 10.0,
             },
-            roi: crate::meta::RoiConfig {
+            roi: RoiConfig {
                 color: "#800080".to_string(),
             },
             categories: vec![],
@@ -95,7 +95,7 @@ mod tests {
 
         let exporter = YoloExporter;
         let result = exporter
-            .export_annotation(&annotation, &meta, "test.jpg", 1920, 1080)
+            .export_annotation(&label, &meta, "test.jpg", 1920, 1080)
             .unwrap();
 
         // Expected: class_id=0, x_center=0.3, y_center=0.3, width=0.4, height=0.4

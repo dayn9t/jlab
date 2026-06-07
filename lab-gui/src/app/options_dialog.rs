@@ -74,7 +74,14 @@ impl OptionsDialogState {
     }
 
     /// Refresh settings from current application state
-    pub fn refresh_from_state(&mut self, language: Language, auto_save: bool, theme: ThemeColor, font_size: f32, ui_scale: f32) {
+    pub fn refresh_from_state(
+        &mut self,
+        language: Language,
+        auto_save: bool,
+        theme: ThemeColor,
+        font_size: f32,
+        ui_scale: f32,
+    ) {
         self.selected_language = language;
         self.auto_save_enabled = auto_save;
         self.theme_color = theme;
@@ -105,7 +112,10 @@ impl OptionsDialogState {
             });
 
         // Close dialog if OK or Cancel was clicked
-        if matches!(button_action, Some(DialogButtonAction::Ok) | Some(DialogButtonAction::Cancel)) {
+        if matches!(
+            button_action,
+            Some(DialogButtonAction::Ok) | Some(DialogButtonAction::Cancel)
+        ) {
             self.show = false;
         }
 
@@ -151,8 +161,16 @@ impl OptionsDialogState {
 
         // Tab selector
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.active_tab, OptionsTab::General, i18n.t(OptionsTab::General.name_key()));
-            ui.selectable_value(&mut self.active_tab, OptionsTab::Shortcuts, i18n.t(OptionsTab::Shortcuts.name_key()));
+            ui.selectable_value(
+                &mut self.active_tab,
+                OptionsTab::General,
+                i18n.t(OptionsTab::General.name_key()),
+            );
+            ui.selectable_value(
+                &mut self.active_tab,
+                OptionsTab::Shortcuts,
+                i18n.t(OptionsTab::Shortcuts.name_key()),
+            );
         });
 
         ui.separator();
@@ -180,10 +198,22 @@ impl OptionsDialogState {
                         .selected_text(lang_text)
                         .width(150.0)
                         .show_ui(ui, |ui| {
-                            if ui.selectable_label(self.selected_language == Language::ZhCN, Language::ZhCN.name()).clicked() {
+                            if ui
+                                .selectable_label(
+                                    self.selected_language == Language::ZhCN,
+                                    Language::ZhCN.name(),
+                                )
+                                .clicked()
+                            {
                                 self.selected_language = Language::ZhCN;
                             }
-                            if ui.selectable_label(self.selected_language == Language::EnUS, Language::EnUS.name()).clicked() {
+                            if ui
+                                .selectable_label(
+                                    self.selected_language == Language::EnUS,
+                                    Language::EnUS.name(),
+                                )
+                                .clicked()
+                            {
                                 self.selected_language = Language::EnUS;
                             }
                         });
@@ -201,7 +231,11 @@ impl OptionsDialogState {
                 // Font size
                 ui.horizontal(|ui| {
                     ui.label(i18n.t("options.font_size"));
-                    let response = ui.add(egui::Slider::new(&mut self.font_size, 10.0..=30.0).step_by(1.0).show_value(true));
+                    let response = ui.add(
+                        egui::Slider::new(&mut self.font_size, 10.0..=30.0)
+                            .step_by(1.0)
+                            .show_value(true),
+                    );
                     if response.changed() {
                         self.pending_changes = true;
                     }
@@ -212,7 +246,11 @@ impl OptionsDialogState {
                 // UI scale
                 ui.horizontal(|ui| {
                     ui.label(i18n.t("options.ui_scale"));
-                    let response = ui.add(egui::Slider::new(&mut self.ui_scale, 0.5..=2.0).step_by(0.1).show_value(true));
+                    let response = ui.add(
+                        egui::Slider::new(&mut self.ui_scale, 0.5..=2.0)
+                            .step_by(0.1)
+                            .show_value(true),
+                    );
                     if response.changed() {
                         self.pending_changes = true;
                     }
@@ -228,13 +266,31 @@ impl OptionsDialogState {
                         .selected_text(theme_text)
                         .width(120.0)
                         .show_ui(ui, |ui| {
-                            if ui.selectable_label(self.theme_color == ThemeColor::Light, i18n.t("options.theme_light")).clicked() {
+                            if ui
+                                .selectable_label(
+                                    self.theme_color == ThemeColor::Light,
+                                    i18n.t("options.theme_light"),
+                                )
+                                .clicked()
+                            {
                                 self.theme_color = ThemeColor::Light;
                             }
-                            if ui.selectable_label(self.theme_color == ThemeColor::Dark, i18n.t("options.theme_dark")).clicked() {
+                            if ui
+                                .selectable_label(
+                                    self.theme_color == ThemeColor::Dark,
+                                    i18n.t("options.theme_dark"),
+                                )
+                                .clicked()
+                            {
                                 self.theme_color = ThemeColor::Dark;
                             }
-                            if ui.selectable_label(self.theme_color == ThemeColor::System, i18n.t("options.theme_system")).clicked() {
+                            if ui
+                                .selectable_label(
+                                    self.theme_color == ThemeColor::System,
+                                    i18n.t("options.theme_system"),
+                                )
+                                .clicked()
+                            {
                                 self.theme_color = ThemeColor::System;
                             }
                         });
@@ -251,7 +307,8 @@ impl OptionsDialogState {
 
                 // Show scrollbar
                 ui.horizontal(|ui| {
-                    let response = ui.checkbox(&mut self.show_scrollbar, i18n.t("options.show_scrollbar"));
+                    let response =
+                        ui.checkbox(&mut self.show_scrollbar, i18n.t("options.show_scrollbar"));
                     if response.changed() {
                         self.pending_changes = true;
                     }
@@ -265,12 +322,13 @@ impl OptionsDialogState {
 
                 // Auto save
                 ui.horizontal(|ui| {
-                    let response = ui.checkbox(&mut self.auto_save_enabled, i18n.t("options.auto_save"));
+                    let response =
+                        ui.checkbox(&mut self.auto_save_enabled, i18n.t("options.auto_save"));
                     if response.changed() {
                         self.pending_changes = true;
                     }
                 });
-        });
+            });
     }
 
     fn show_shortcuts_tab(&mut self, ui: &mut egui::Ui, i18n: &crate::i18n::I18n) {
@@ -280,49 +338,57 @@ impl OptionsDialogState {
         }
 
         if let Some(ref mut editor) = self.shortcut_editor {
-            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                ui.add_space(10.0);
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.add_space(10.0);
 
-                // Category filter for shortcuts - display as horizontal buttons
-                ui.horizontal(|ui| {
-                    ui.label(i18n.t("options.category"));
-                    ui.label(":");
-
-                    // All categories button
-                    if ui.selectable_label(
-                        editor.category_filter.is_none(),
-                        i18n.t("shortcuts.all_categories"),
-                    ).clicked() {
-                        editor.category_filter = None;
-                    }
-
-                    // Individual category buttons
-                    for cat in crate::shortcuts::ShortcutCategory::all_categories() {
-                        if ui.selectable_label(
-                            editor.category_filter == Some(cat),
-                            i18n.t(cat.name_key()),
-                        ).clicked() {
-                            editor.category_filter = Some(cat);
-                        }
-                    }
-                });
-
-                ui.separator();
-
-                let filtered = editor.get_filtered_shortcuts();
-                for (action, binding) in filtered {
+                    // Category filter for shortcuts - display as horizontal buttons
                     ui.horizontal(|ui| {
-                        ui.label(i18n.t(action.description_key()));
-                        ui.separator();
-                        let shortcut_text = format_shortcut(binding);
-                        ui.label(shortcut_text);
-                        ui.separator();
-                        if ui.small_button(i18n.t("shortcuts.edit")).clicked() {
-                            // TODO: open edit dialog
+                        ui.label(i18n.t("options.category"));
+                        ui.label(":");
+
+                        // All categories button
+                        if ui
+                            .selectable_label(
+                                editor.category_filter.is_none(),
+                                i18n.t("shortcuts.all_categories"),
+                            )
+                            .clicked()
+                        {
+                            editor.category_filter = None;
+                        }
+
+                        // Individual category buttons
+                        for cat in crate::shortcuts::ShortcutCategory::all_categories() {
+                            if ui
+                                .selectable_label(
+                                    editor.category_filter == Some(cat),
+                                    i18n.t(cat.name_key()),
+                                )
+                                .clicked()
+                            {
+                                editor.category_filter = Some(cat);
+                            }
                         }
                     });
-                }
-            });
+
+                    ui.separator();
+
+                    let filtered = editor.get_filtered_shortcuts();
+                    for (action, binding) in filtered {
+                        ui.horizontal(|ui| {
+                            ui.label(i18n.t(action.description_key()));
+                            ui.separator();
+                            let shortcut_text = format_shortcut(binding);
+                            ui.label(shortcut_text);
+                            ui.separator();
+                            if ui.small_button(i18n.t("shortcuts.edit")).clicked() {
+                                // TODO: open edit dialog
+                            }
+                        });
+                    }
+                });
         }
     }
 
@@ -331,7 +397,10 @@ impl OptionsDialogState {
         DialogSettings {
             language: self.selected_language,
             auto_save: self.auto_save_enabled,
-            shortcut_config: self.shortcut_editor.as_ref().map(|e| e.working_config.clone()),
+            shortcut_config: self
+                .shortcut_editor
+                .as_ref()
+                .map(|e| e.working_config.clone()),
             font_size: self.font_size,
             ui_scale: self.ui_scale,
             theme_color: self.theme_color,
@@ -352,7 +421,9 @@ impl OptionsDialogState {
 
         // Restore shortcuts to defaults
         if let Some(ref mut editor) = self.shortcut_editor {
-            editor.working_config = crate::shortcuts::ShortcutManager::new().get_config().clone();
+            editor.working_config = crate::shortcuts::ShortcutManager::new()
+                .get_config()
+                .clone();
             editor.refresh_conflicts();
         }
 
@@ -374,9 +445,15 @@ pub struct DialogSettings {
 
 fn format_shortcut(binding: &crate::shortcuts::ShortcutBinding) -> String {
     let mut parts = Vec::new();
-    if binding.ctrl { parts.push("Ctrl"); }
-    if binding.shift { parts.push("Shift"); }
-    if binding.alt { parts.push("Alt"); }
+    if binding.ctrl {
+        parts.push("Ctrl");
+    }
+    if binding.shift {
+        parts.push("Shift");
+    }
+    if binding.alt {
+        parts.push("Alt");
+    }
     parts.push(&binding.key);
     parts.join("+")
 }

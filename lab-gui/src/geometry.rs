@@ -1,7 +1,7 @@
 use lab_core::Point;
 
 /// Check if a point is inside a polygon using ray casting algorithm
-pub fn point_in_polygon(point: &Point, polygon: &[Point]) -> bool {
+pub fn point_in_polygon(point: &Point<f32>, polygon: &[Point<f32>]) -> bool {
     if polygon.len() < 3 {
         return false;
     }
@@ -29,7 +29,7 @@ pub fn point_in_polygon(point: &Point, polygon: &[Point]) -> bool {
 }
 
 /// Calculate distance from point to line segment
-pub fn point_to_segment_distance(point: &Point, p1: &Point, p2: &Point) -> f32 {
+pub fn point_to_segment_distance(point: &Point<f32>, p1: &Point<f32>, p2: &Point<f32>) -> f32 {
     let dx = p2.x - p1.x;
     let dy = p2.y - p1.y;
 
@@ -55,7 +55,7 @@ pub fn point_to_segment_distance(point: &Point, p1: &Point, p2: &Point) -> f32 {
 }
 
 /// Calculate bounding box of a polygon
-pub fn bounding_box(polygon: &[Point]) -> Option<(Point, Point)> {
+pub fn bounding_box(polygon: &[Point<f32>]) -> Option<(Point<f32>, Point<f32>)> {
     if polygon.is_empty() {
         return None;
     }
@@ -72,14 +72,14 @@ pub fn bounding_box(polygon: &[Point]) -> Option<(Point, Point)> {
         max_y = max_y.max(point.y);
     }
 
-    Some((Point::new(min_x, min_y), Point::new(max_x, max_y)))
+    Some((Point { x: min_x, y: min_y }, Point { x: max_x, y: max_y }))
 }
 
-fn orientation(a: &Point, b: &Point, c: &Point) -> f32 {
+fn orientation(a: &Point<f32>, b: &Point<f32>, c: &Point<f32>) -> f32 {
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 }
 
-fn on_segment(a: &Point, b: &Point, c: &Point) -> bool {
+fn on_segment(a: &Point<f32>, b: &Point<f32>, c: &Point<f32>) -> bool {
     let min_x = a.x.min(b.x);
     let max_x = a.x.max(b.x);
     let min_y = a.y.min(b.y);
@@ -89,7 +89,7 @@ fn on_segment(a: &Point, b: &Point, c: &Point) -> bool {
     c.x >= min_x - eps && c.x <= max_x + eps && c.y >= min_y - eps && c.y <= max_y + eps
 }
 
-fn segments_intersect(a1: &Point, a2: &Point, b1: &Point, b2: &Point) -> bool {
+fn segments_intersect(a1: &Point<f32>, a2: &Point<f32>, b1: &Point<f32>, b2: &Point<f32>) -> bool {
     let o1 = orientation(a1, a2, b1);
     let o2 = orientation(a1, a2, b2);
     let o3 = orientation(b1, b2, a1);
@@ -113,7 +113,7 @@ fn segments_intersect(a1: &Point, a2: &Point, b1: &Point, b2: &Point) -> bool {
         && (o3 > eps && o4 < -eps || o3 < -eps && o4 > eps)
 }
 
-pub fn fix_self_intersections(points: &mut Vec<Point>) -> bool {
+pub fn fix_self_intersections(points: &mut Vec<Point<f32>>) -> bool {
     if points.len() < 4 {
         return false;
     }
@@ -172,7 +172,7 @@ pub fn fix_self_intersections(points: &mut Vec<Point>) -> bool {
 mod tests {
     use super::*;
 
-    fn polygon_has_self_intersections(points: &[Point]) -> bool {
+    fn polygon_has_self_intersections(points: &[Point<f32>]) -> bool {
         if points.len() < 4 {
             return false;
         }
@@ -201,21 +201,21 @@ mod tests {
     #[test]
     fn test_point_in_polygon() {
         let polygon = vec![
-            Point::new(0.0, 0.0),
-            Point::new(1.0, 0.0),
-            Point::new(1.0, 1.0),
-            Point::new(0.0, 1.0),
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 1.0, y: 0.0 },
+            Point { x: 1.0, y: 1.0 },
+            Point { x: 0.0, y: 1.0 },
         ];
 
-        assert!(point_in_polygon(&Point::new(0.5, 0.5), &polygon));
-        assert!(!point_in_polygon(&Point::new(1.5, 0.5), &polygon));
+        assert!(point_in_polygon(&Point { x: 0.5, y: 0.5 }, &polygon));
+        assert!(!point_in_polygon(&Point { x: 1.5, y: 0.5 }, &polygon));
     }
 
     #[test]
     fn test_point_to_segment_distance() {
-        let p1 = Point::new(0.0, 0.0);
-        let p2 = Point::new(1.0, 0.0);
-        let point = Point::new(0.5, 0.5);
+        let p1 = Point { x: 0.0, y: 0.0 };
+        let p2 = Point { x: 1.0, y: 0.0 };
+        let point = Point { x: 0.5, y: 0.5 };
 
         let distance = point_to_segment_distance(&point, &p1, &p2);
         assert!((distance - 0.5).abs() < 0.001);
@@ -224,10 +224,10 @@ mod tests {
     #[test]
     fn test_bounding_box() {
         let polygon = vec![
-            Point::new(0.2, 0.3),
-            Point::new(0.8, 0.3),
-            Point::new(0.8, 0.7),
-            Point::new(0.2, 0.7),
+            Point { x: 0.2, y: 0.3 },
+            Point { x: 0.8, y: 0.3 },
+            Point { x: 0.8, y: 0.7 },
+            Point { x: 0.2, y: 0.7 },
         ];
 
         let (min, max) = bounding_box(&polygon).unwrap();
@@ -240,10 +240,10 @@ mod tests {
     #[test]
     fn test_fix_self_intersections() {
         let mut polygon = vec![
-            Point::new(0.0, 0.0),
-            Point::new(1.0, 1.0),
-            Point::new(0.0, 1.0),
-            Point::new(1.0, 0.0),
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 1.0, y: 1.0 },
+            Point { x: 0.0, y: 1.0 },
+            Point { x: 1.0, y: 0.0 },
         ];
 
         assert!(polygon_has_self_intersections(&polygon));

@@ -1,5 +1,5 @@
 use crate::export::Exporter;
-use crate::{Annotation, Meta, Result};
+use crate::{find_category, Label, LabelMeta, Result};
 use std::path::Path;
 
 /// Pascal VOC XML format exporter
@@ -8,8 +8,8 @@ pub struct VocExporter;
 impl Exporter for VocExporter {
     fn export_annotation(
         &self,
-        annotation: &Annotation,
-        meta: &Meta,
+        annotation: &Label,
+        meta: &LabelMeta,
         image_path: &str,
         image_width: u32,
         image_height: u32,
@@ -41,7 +41,7 @@ impl Exporter for VocExporter {
         xml.push_str("  <segmented>0</segmented>\n");
 
         for obj in &annotation.objects {
-            if obj.polygon.is_empty() {
+            if obj.polygon.0.is_empty() {
                 continue;
             }
 
@@ -51,7 +51,7 @@ impl Exporter for VocExporter {
             let mut max_x = f32::MIN;
             let mut max_y = f32::MIN;
 
-            for point in &obj.polygon {
+            for point in &obj.polygon.0 {
                 min_x = min_x.min(point.x);
                 min_y = min_y.min(point.y);
                 max_x = max_x.max(point.x);
@@ -65,8 +65,7 @@ impl Exporter for VocExporter {
             let ymax = (max_y * image_height as f32) as i32;
 
             // Get category name
-            let category_name = meta
-                .find_category(obj.category)
+            let category_name = find_category(meta, obj.category)
                 .map(|c| c.name.as_str())
                 .unwrap_or("unknown");
 
@@ -93,27 +92,26 @@ impl Exporter for VocExporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::annotation::Object;
-    use crate::geometry::Point;
-    use crate::meta::{Category, RoiConfig, ShapeConfig};
+    use crate::annotation::{add_object, new_label, new_object};
+    use crate::{CatDef, LabelMeta, Point, Polygon, RoiConfig, ShapeConfig};
 
     #[test]
     fn test_voc_export() {
-        let mut annotation = Annotation::new("test");
+        let mut label = new_label("test");
 
-        let obj = Object::new(
+        let obj = new_object(
             0,
             0,
-            vec![
-                Point::new(0.1, 0.1),
-                Point::new(0.5, 0.1),
-                Point::new(0.5, 0.5),
-                Point::new(0.1, 0.5),
-            ],
+            Polygon::from(vec![
+                Point { x: 0.1, y: 0.1 },
+                Point { x: 0.5, y: 0.1 },
+                Point { x: 0.5, y: 0.5 },
+                Point { x: 0.1, y: 0.5 },
+            ]),
         );
-        annotation.add_object(obj);
+        add_object(&mut label, obj);
 
-        let meta = Meta {
+        let meta = LabelMeta {
             id: 1,
             name: "TestDataset".to_string(),
             description: "test".to_string(),
@@ -126,7 +124,7 @@ mod tests {
             roi: RoiConfig {
                 color: "#800080".to_string(),
             },
-            categories: vec![Category {
+            categories: vec![CatDef {
                 id: 0,
                 name: "person".to_string(),
                 description: "Person".to_string(),
@@ -140,7 +138,7 @@ mod tests {
 
         let exporter = VocExporter;
         let result = exporter
-            .export_annotation(&annotation, &meta, "/path/to/test.jpg", 1000, 1000)
+            .export_annotation(&label, &meta, "/path/to/test.jpg", 1000, 1000)
             .unwrap();
 
         assert!(result.contains("<annotation>"));

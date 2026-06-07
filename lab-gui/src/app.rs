@@ -79,17 +79,17 @@ impl LabApp {
         }
     }
 
-    fn with_polygon_mut<F>(annotation: &mut lab_core::Annotation, shape_id: i32, mutator: F) -> bool
+    fn with_polygon_mut<F>(label: &mut lab_core::Label, shape_id: i32, mutator: F) -> bool
     where
-        F: FnOnce(&mut Vec<lab_core::Point>),
+        F: FnOnce(&mut Vec<lab_core::Point<f32>>),
     {
         if let Some(roi_index) = crate::state::roi_index_from_id(shape_id) {
-            if let Some(roi_points) = annotation.rois.get_mut(roi_index) {
-                mutator(roi_points);
+            if let Some(roi) = label.rois.get_mut(roi_index) {
+                mutator(&mut roi.0);
                 return true;
             }
-        } else if let Some(obj) = annotation.objects.iter_mut().find(|o| o.id == shape_id) {
-            mutator(&mut obj.polygon);
+        } else if let Some(obj) = label.objects.iter_mut().find(|o| o.id == shape_id) {
+            mutator(&mut obj.polygon.0);
             return true;
         }
 
@@ -241,9 +241,10 @@ impl LabApp {
                 self.state.auto_save_enabled,
                 self.state.theme_color,
                 self.state.font_size,
-                self.state.ui_scale
+                self.state.ui_scale,
             );
-            self.options_dialog.show_dialog(self.state.shortcut_manager.get_config());
+            self.options_dialog
+                .show_dialog(self.state.shortcut_manager.get_config());
         }
 
         let (_show, open, button_action) = self.options_dialog.show(ctx, &self.state.i18n);
@@ -332,8 +333,14 @@ impl LabApp {
             }
         }
 
-        log::info!("Options applied: auto_save={}, font_size={}, ui_scale={}, theme={:?}, scrollbar={}",
-            settings.auto_save, settings.font_size, settings.ui_scale, settings.theme_color, settings.show_scrollbar);
+        log::info!(
+            "Options applied: auto_save={}, font_size={}, ui_scale={}, theme={:?}, scrollbar={}",
+            settings.auto_save,
+            settings.font_size,
+            settings.ui_scale,
+            settings.theme_color,
+            settings.show_scrollbar
+        );
     }
 
     fn apply_ui_scale(&self, ctx: &egui::Context) {
@@ -918,34 +925,34 @@ impl LabApp {
                 self.canvas.reset_view();
             }
             ShortcutAction::CycleNextObject => {
-                if let Some(annotation) = &self.state.current_annotation {
-                    if !annotation.objects.is_empty() {
+                if let Some(label) = &self.state.current_annotation {
+                    if !label.objects.is_empty() {
                         let current_idx = self
                             .state
                             .selected_object_id
-                            .and_then(|id| annotation.objects.iter().position(|o| o.id == id))
+                            .and_then(|id| label.objects.iter().position(|o| o.id == id))
                             .unwrap_or(0);
 
-                        let next_idx = (current_idx + 1) % annotation.objects.len();
-                        self.state.selected_object_id = Some(annotation.objects[next_idx].id);
+                        let next_idx = (current_idx + 1) % label.objects.len();
+                        self.state.selected_object_id = Some(label.objects[next_idx].id);
                     }
                 }
             }
             ShortcutAction::CyclePreviousObject => {
-                if let Some(annotation) = &self.state.current_annotation {
-                    if !annotation.objects.is_empty() {
+                if let Some(label) = &self.state.current_annotation {
+                    if !label.objects.is_empty() {
                         let current_idx = self
                             .state
                             .selected_object_id
-                            .and_then(|id| annotation.objects.iter().position(|o| o.id == id))
+                            .and_then(|id| label.objects.iter().position(|o| o.id == id))
                             .unwrap_or(0);
 
                         let prev_idx = if current_idx == 0 {
-                            annotation.objects.len() - 1
+                            label.objects.len() - 1
                         } else {
                             current_idx - 1
                         };
-                        self.state.selected_object_id = Some(annotation.objects[prev_idx].id);
+                        self.state.selected_object_id = Some(label.objects[prev_idx].id);
                     }
                 }
             }
@@ -1066,11 +1073,11 @@ impl LabApp {
             let dx_norm = (move_distance * direction.0) / image.width as f32;
             let dy_norm = (move_distance * direction.1) / image.height as f32;
 
-            if let Some(annotation) = &mut self.state.current_annotation {
+            if let Some(label) = &mut self.state.current_annotation {
                 // Priority 1: Move selected vertex if any
                 if let Some((obj_id, vertex_idx)) = self.state.editing_state.selected_vertex {
                     let mut updated = false;
-                    Self::with_polygon_mut(annotation, obj_id, |polygon| {
+                    Self::with_polygon_mut(label, obj_id, |polygon| {
                         if vertex_idx < polygon.len() {
                             polygon[vertex_idx].x =
                                 (polygon[vertex_idx].x + dx_norm).clamp(0.0, 1.0);
@@ -1084,7 +1091,7 @@ impl LabApp {
                     }
                 } else if let Some(obj_id) = self.state.selected_object_id {
                     // Priority 2: Move selected object
-                    Self::with_polygon_mut(annotation, obj_id, |polygon| {
+                    Self::with_polygon_mut(label, obj_id, |polygon| {
                         for vertex in polygon {
                             vertex.x = (vertex.x + dx_norm).clamp(0.0, 1.0);
                             vertex.y = (vertex.y + dy_norm).clamp(0.0, 1.0);
@@ -1151,11 +1158,13 @@ impl LabApp {
         }
 
         if self.state.draw_target == crate::state::DrawTarget::Roi {
-            if let Some(annotation) = &mut self.state.current_annotation {
-                annotation.rois.push(self.state.temp_points.clone());
-                annotation.touch();
+            if let Some(label) = &mut self.state.current_annotation {
+                label
+                    .rois
+                    .push(lab_core::Polygon::from(self.state.temp_points.clone()));
+                lab_core::touch(label);
                 self.state.has_unsaved_changes = true;
-                let roi_id = crate::state::roi_id_from_index(annotation.rois.len() - 1);
+                let roi_id = crate::state::roi_id_from_index(label.rois.len() - 1);
                 self.state.selected_object_id = Some(roi_id);
             }
 
@@ -1164,11 +1173,11 @@ impl LabApp {
             return true;
         }
 
-        let polygon = self.state.temp_points.clone();
+        let polygon = lab_core::Polygon::from(self.state.temp_points.clone());
 
         // Get next object ID
-        let new_id = if let Some(annotation) = &self.state.current_annotation {
-            annotation.objects.iter().map(|o| o.id).max().unwrap_or(-1) + 1
+        let new_id = if let Some(label) = &self.state.current_annotation {
+            label.objects.iter().map(|o| o.id).max().unwrap_or(-1) + 1
         } else {
             0
         };
@@ -1187,12 +1196,12 @@ impl LabApp {
             category: default_category,
             confidence: 1.0,
             polygon,
-            properties: std::collections::HashMap::new(),
+            properties: Vec::new(),
         };
 
         // Add to annotation
-        if let Some(annotation) = &mut self.state.current_annotation {
-            annotation.objects.push(new_object);
+        if let Some(label) = &mut self.state.current_annotation {
+            label.objects.push(new_object);
             self.state.has_unsaved_changes = true;
 
             // Select the new object
@@ -1233,18 +1242,18 @@ impl LabApp {
             return;
         }
 
-        if let (Some(annotation), Some(obj_id)) = (
+        if let (Some(label), Some(obj_id)) = (
             &mut self.state.current_annotation,
             self.state.selected_object_id,
         ) {
             let mut updated = false;
-            Self::with_polygon_mut(annotation, obj_id, |polygon| {
+            Self::with_polygon_mut(label, obj_id, |polygon| {
                 if let Some((min, max)) = crate::geometry::bounding_box(polygon) {
                     *polygon = vec![
-                        lab_core::Point::new(min.x, min.y),
-                        lab_core::Point::new(max.x, min.y),
-                        lab_core::Point::new(max.x, max.y),
-                        lab_core::Point::new(min.x, max.y),
+                        lab_core::Point { x: min.x, y: min.y },
+                        lab_core::Point { x: max.x, y: min.y },
+                        lab_core::Point { x: max.x, y: max.y },
+                        lab_core::Point { x: min.x, y: max.y },
                     ];
                     updated = true;
                 }
@@ -1261,12 +1270,12 @@ impl LabApp {
             return;
         }
 
-        if let (Some(annotation), Some(obj_id)) = (
+        if let (Some(label), Some(obj_id)) = (
             &mut self.state.current_annotation,
             self.state.selected_object_id,
         ) {
             let mut updated = false;
-            Self::with_polygon_mut(annotation, obj_id, |polygon| {
+            Self::with_polygon_mut(label, obj_id, |polygon| {
                 if crate::geometry::fix_self_intersections(polygon) {
                     updated = true;
                 }
@@ -1284,11 +1293,11 @@ impl LabApp {
             return;
         }
 
-        if let (Some(annotation), Some(obj_id)) = (
+        if let (Some(label), Some(obj_id)) = (
             &mut self.state.current_annotation,
             self.state.selected_object_id,
         ) {
-            Self::with_polygon_mut(annotation, obj_id, |polygon| {
+            Self::with_polygon_mut(label, obj_id, |polygon| {
                 if let Some((min, max)) = crate::geometry::bounding_box(polygon) {
                     let center_x = (min.x + max.x) / 2.0;
                     let center_y = (min.y + max.y) / 2.0;

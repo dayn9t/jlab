@@ -1,5 +1,5 @@
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, Stroke, TextureHandle, Ui, Vec2};
-use lab_core::{Annotation, Meta, Point};
+use lab_core::{Label, LabelMeta, Point};
 use std::collections::HashMap;
 
 /// Pending click for double-click detection
@@ -23,7 +23,7 @@ pub struct Canvas {
     dragging_vertex: Option<(i32, usize)>,
 
     /// Currently dragging object (object_id, drag_start_pos)
-    dragging_object: Option<(i32, Point)>,
+    dragging_object: Option<(i32, Point<f32>)>,
 
     /// Pending click for double-click detection in editing mode
     pending_click: Option<PendingClick>,
@@ -75,11 +75,11 @@ impl Canvas {
         &mut self,
         ui: &mut Ui,
         image_data: Option<&crate::state::ImageData>,
-        annotation: Option<&Annotation>,
-        meta: Option<&Meta>,
+        label: Option<&Label>,
+        meta: Option<&LabelMeta>,
         selected_object_id: Option<i32>,
         selected_vertex: Option<(i32, usize)>,
-        temp_points: &[Point],
+        temp_points: &[Point<f32>],
         edit_mode: crate::state::EditMode,
         no_image_text: &str,
     ) -> CanvasResponse {
@@ -148,7 +148,7 @@ impl Canvas {
                 if image_rect.contains(pointer_pos) {
                     let cursor = self.determine_cursor(
                         pointer_pos,
-                        annotation,
+                        label,
                         selected_object_id,
                         image_rect,
                         image_size,
@@ -160,12 +160,12 @@ impl Canvas {
             }
 
             // Draw annotations
-            if let Some(annotation) = annotation {
+            if let Some(label) = label {
                 // Find hovered vertex
                 let hovered_vertex = if let Some(pointer_pos) = canvas_response.hover_pos() {
                     self.find_vertex_at_pos(
                         pointer_pos,
-                        annotation,
+                        label,
                         selected_object_id,
                         image_rect,
                         image_size,
@@ -176,7 +176,7 @@ impl Canvas {
 
                 self.draw_annotations(
                     &painter,
-                    annotation,
+                    label,
                     meta,
                     selected_object_id,
                     hovered_vertex,
@@ -202,7 +202,7 @@ impl Canvas {
             }
 
             // Handle vertex dragging
-            if let Some(annotation) = annotation {
+            if let Some(label) = label {
                 if let Some(pointer_pos) = canvas_response.interact_pointer_pos() {
                     if canvas_response.drag_started()
                         && self.dragging_vertex.is_none()
@@ -213,7 +213,7 @@ impl Canvas {
                                 // Check edge first (higher priority than vertex)
                                 if let Some((obj_id, edge_idx)) = self.find_edge_at_pos(
                                     pointer_pos,
-                                    annotation,
+                                    label,
                                     selected_object_id,
                                     image_rect,
                                     image_size,
@@ -229,7 +229,7 @@ impl Canvas {
                                 } else {
                                     self.dragging_vertex = self.find_vertex_at_pos(
                                         pointer_pos,
-                                        annotation,
+                                        label,
                                         selected_object_id,
                                         image_rect,
                                         image_size,
@@ -238,7 +238,7 @@ impl Canvas {
                                     if self.dragging_vertex.is_none() {
                                         if let Some(obj_id) = self.find_object_at_pos(
                                             pointer_pos,
-                                            annotation,
+                                            label,
                                             image_rect,
                                             image_size,
                                         ) {
@@ -280,10 +280,10 @@ impl Canvas {
                         if let Some((obj_id, drag_start)) = self.dragging_object {
                             let current_pos =
                                 self.screen_to_normalized(pointer_pos, image_rect, image_size);
-                            let offset = Point::new(
-                                current_pos.x - drag_start.x,
-                                current_pos.y - drag_start.y,
-                            );
+                            let offset = Point {
+                                x: current_pos.x - drag_start.x,
+                                y: current_pos.y - drag_start.y,
+                            };
                             response.object_dragged = Some((obj_id, offset));
                             // Update drag start for next frame
                             self.dragging_object = Some((obj_id, current_pos));
@@ -315,17 +315,17 @@ impl Canvas {
                             response.finish_drawing_pos =
                                 Some(self.screen_to_normalized(pos, image_rect, image_size));
                         }
-                    } else if let Some(annotation) = annotation {
+                    } else if let Some(label) = label {
                         // First check if double-clicking on a vertex
-                        if let Some((obj_id, vertex_idx)) = self.find_vertex_at_pos_any_object(
-                            pos, annotation, image_rect, image_size, meta,
-                        ) {
+                        if let Some((obj_id, vertex_idx)) = self
+                            .find_vertex_at_pos_any_object(pos, label, image_rect, image_size, meta)
+                        {
                             // Double-clicked on a vertex - select the shape
                             response.vertex_double_clicked = Some((obj_id, vertex_idx));
                         } else {
                             // Not on a vertex, check if double-clicking on an object
                             if let Some(obj_id) =
-                                self.find_object_at_pos(pos, annotation, image_rect, image_size)
+                                self.find_object_at_pos(pos, label, image_rect, image_size)
                             {
                                 // Double-clicked on an object - enter edit mode
                                 response.object_double_clicked = Some(obj_id);
@@ -343,7 +343,7 @@ impl Canvas {
                 && image_rect.contains(canvas_response.interact_pointer_pos().unwrap_or_default())
             {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
-                    if let Some(_annotation) = annotation {
+                    if let Some(_label) = label {
                         // In Drawing mode, place points for new object (no delay needed)
                         if edit_mode == crate::state::EditMode::Drawing {
                             let normalized_pos =
@@ -375,20 +375,20 @@ impl Canvas {
                     let pos = pending.pos;
                     self.pending_click = None;
 
-                    if let Some(annotation) = annotation {
+                    if let Some(label) = label {
                         if edit_mode == crate::state::EditMode::Editing {
                             // Editing mode: vertex or object selection
                             if let Some((obj_id, vertex_idx)) = self.find_vertex_at_pos(
                                 pos,
-                                annotation,
+                                label,
                                 selected_object_id,
                                 image_rect,
                                 image_size,
                             ) {
                                 response.vertex_clicked = Some((obj_id, vertex_idx));
-                            } else if let Some(clicked_obj_id) = self.find_smallest_object_at_pos(
-                                pos, annotation, image_rect, image_size,
-                            ) {
+                            } else if let Some(clicked_obj_id) =
+                                self.find_smallest_object_at_pos(pos, label, image_rect, image_size)
+                            {
                                 response.object_clicked = Some(clicked_obj_id);
                             } else {
                                 response.clicked_empty = true;
@@ -396,7 +396,7 @@ impl Canvas {
                         } else {
                             // Browse mode: object selection only
                             if let Some(clicked_obj_id) =
-                                self.find_object_at_pos(pos, annotation, image_rect, image_size)
+                                self.find_object_at_pos(pos, label, image_rect, image_size)
                             {
                                 response.object_clicked = Some(clicked_obj_id);
                             } else {
@@ -412,11 +412,11 @@ impl Canvas {
                 if let Some(pos) = canvas_response.interact_pointer_pos() {
                     let mut handled = false;
                     if edit_mode == crate::state::EditMode::Editing {
-                        if let Some(annotation) = annotation {
+                        if let Some(label) = label {
                             // Check if right-clicking on vertex to delete
                             if let Some((obj_id, vertex_idx)) = self.find_vertex_at_pos(
                                 pos,
-                                annotation,
+                                label,
                                 selected_object_id,
                                 image_rect,
                                 image_size,
@@ -457,8 +457,8 @@ impl Canvas {
     fn draw_annotations(
         &self,
         painter: &egui::Painter,
-        annotation: &Annotation,
-        meta: Option<&Meta>,
+        label: &Label,
+        meta: Option<&LabelMeta>,
         selected_object_id: Option<i32>,
         hovered_vertex: Option<(i32, usize)>,
         selected_vertex: Option<(i32, usize)>,
@@ -466,12 +466,12 @@ impl Canvas {
         image_size: Vec2,
         edit_mode: crate::state::EditMode,
     ) {
-        if !annotation.rois.is_empty() {
+        if !label.rois.is_empty() {
             let roi_color = meta
                 .and_then(|m| parse_color(&m.roi.color))
                 .unwrap_or(Color32::from_rgb(128, 0, 128));
 
-            for (idx, roi_points) in annotation.rois.iter().enumerate() {
+            for (idx, roi) in label.rois.iter().enumerate() {
                 let roi_id = crate::state::roi_id_from_index(idx);
                 let is_selected = selected_object_id == Some(roi_id);
                 let draw_vertices = edit_mode == crate::state::EditMode::Editing && is_selected;
@@ -499,7 +499,7 @@ impl Canvas {
 
                 self.draw_polygon(
                     painter,
-                    roi_points,
+                    &roi.0,
                     image_rect,
                     image_size,
                     roi_color,
@@ -513,7 +513,7 @@ impl Canvas {
         }
 
         // Draw objects
-        for obj in &annotation.objects {
+        for obj in &label.objects {
             let is_selected = selected_object_id == Some(obj.id);
             let draw_vertices = edit_mode == crate::state::EditMode::Editing && is_selected;
 
@@ -541,13 +541,13 @@ impl Canvas {
 
             // Get category color
             let color = meta
-                .and_then(|m| m.find_category(obj.category))
+                .and_then(|m| lab_core::find_category(m, obj.category))
                 .and_then(|c| parse_color(&c.color))
                 .unwrap_or(Color32::RED);
 
             self.draw_polygon(
                 painter,
-                &obj.polygon,
+                &obj.polygon.0,
                 image_rect,
                 image_size,
                 color,
@@ -559,13 +559,13 @@ impl Canvas {
             );
 
             // Draw label
-            if !obj.polygon.is_empty() {
+            if !obj.polygon.0.is_empty() {
                 let category_name = meta
-                    .and_then(|m| m.find_category(obj.category))
+                    .and_then(|m| lab_core::find_category(m, obj.category))
                     .map(|c| c.name.as_str())
                     .unwrap_or("Unknown");
 
-                let first_point = &obj.polygon[0];
+                let first_point = &obj.polygon.0[0];
                 let screen_pos = self.normalized_to_screen(first_point, image_rect, image_size);
 
                 let label_text = format!("#{} {}", obj.id, category_name);
@@ -584,7 +584,7 @@ impl Canvas {
     fn draw_polygon(
         &self,
         painter: &egui::Painter,
-        points: &[Point],
+        points: &[Point<f32>],
         image_rect: Rect,
         image_size: Vec2,
         color: Color32,
@@ -647,7 +647,7 @@ impl Canvas {
     fn draw_temp_points(
         &self,
         painter: &egui::Painter,
-        points: &[Point],
+        points: &[Point<f32>],
         image_rect: Rect,
         image_size: Vec2,
     ) {
@@ -685,20 +685,25 @@ impl Canvas {
     }
 
     /// Convert normalized coordinates (0.0-1.0) to screen coordinates
-    fn normalized_to_screen(&self, point: &Point, image_rect: Rect, _image_size: Vec2) -> Pos2 {
+    fn normalized_to_screen(
+        &self,
+        point: &Point<f32>,
+        image_rect: Rect,
+        _image_size: Vec2,
+    ) -> Pos2 {
         let x = image_rect.left() + point.x * image_rect.width();
         let y = image_rect.top() + point.y * image_rect.height();
         Pos2::new(x, y)
     }
 
     /// Convert screen coordinates to normalized coordinates (0.0-1.0)
-    fn screen_to_normalized(&self, pos: Pos2, image_rect: Rect, _image_size: Vec2) -> Point {
+    fn screen_to_normalized(&self, pos: Pos2, image_rect: Rect, _image_size: Vec2) -> Point<f32> {
         let x = ((pos.x - image_rect.left()) / image_rect.width()).clamp(0.0, 1.0);
         let y = ((pos.y - image_rect.top()) / image_rect.height()).clamp(0.0, 1.0);
-        Point::new(x, y)
+        Point { x, y }
     }
 
-    fn polygon_area(points: &[Point]) -> f32 {
+    fn polygon_area(points: &[Point<f32>]) -> f32 {
         if points.len() < 3 {
             return 0.0;
         }
@@ -710,7 +715,7 @@ impl Canvas {
             sum -= points[j].x * points[i].y;
         }
 
-        (sum / 2.0).abs()
+        (sum / 2.0_f32).abs()
     }
 
     /// Find vertex near mouse position
@@ -718,7 +723,7 @@ impl Canvas {
     fn find_vertex_at_pos(
         &self,
         pos: Pos2,
-        annotation: &Annotation,
+        label: &Label,
         selected_object_id: Option<i32>,
         image_rect: Rect,
         image_size: Vec2,
@@ -728,8 +733,8 @@ impl Canvas {
         // Only check selected object
         if let Some(selected_id) = selected_object_id {
             if let Some(roi_index) = crate::state::roi_index_from_id(selected_id) {
-                if let Some(roi_points) = annotation.rois.get(roi_index) {
-                    for (i, point) in roi_points.iter().enumerate() {
+                if let Some(roi) = label.rois.get(roi_index) {
+                    for (i, point) in roi.0.iter().enumerate() {
                         let screen_pos = self.normalized_to_screen(point, image_rect, image_size);
                         let distance = pos.distance(screen_pos);
                         if distance < threshold {
@@ -737,8 +742,8 @@ impl Canvas {
                         }
                     }
                 }
-            } else if let Some(obj) = annotation.objects.iter().find(|o| o.id == selected_id) {
-                for (i, point) in obj.polygon.iter().enumerate() {
+            } else if let Some(obj) = label.objects.iter().find(|o| o.id == selected_id) {
+                for (i, point) in obj.polygon.0.iter().enumerate() {
                     let screen_pos = self.normalized_to_screen(point, image_rect, image_size);
                     let distance = pos.distance(screen_pos);
                     if distance < threshold {
@@ -757,16 +762,16 @@ impl Canvas {
     fn find_vertex_at_pos_any_object(
         &self,
         pos: Pos2,
-        annotation: &Annotation,
+        label: &Label,
         image_rect: Rect,
         image_size: Vec2,
-        meta: Option<&Meta>,
+        meta: Option<&LabelMeta>,
     ) -> Option<(i32, usize)> {
         let threshold = meta.map(|m| m.shape.vertex_radius).unwrap_or(10.0); // pixels
 
         // Check all objects (in reverse order for top-to-bottom priority)
-        for obj in annotation.objects.iter().rev() {
-            for (i, point) in obj.polygon.iter().enumerate() {
+        for obj in label.objects.iter().rev() {
+            for (i, point) in obj.polygon.0.iter().enumerate() {
                 let screen_pos = self.normalized_to_screen(point, image_rect, image_size);
                 let distance = pos.distance(screen_pos);
                 if distance < threshold {
@@ -775,8 +780,8 @@ impl Canvas {
             }
         }
 
-        for (idx, roi_points) in annotation.rois.iter().enumerate().rev() {
-            for (i, point) in roi_points.iter().enumerate() {
+        for (idx, roi) in label.rois.iter().enumerate().rev() {
+            for (i, point) in roi.0.iter().enumerate() {
                 let screen_pos = self.normalized_to_screen(point, image_rect, image_size);
                 let distance = pos.distance(screen_pos);
                 if distance < threshold {
@@ -794,7 +799,7 @@ impl Canvas {
     fn find_edge_at_pos(
         &self,
         pos: Pos2,
-        annotation: &Annotation,
+        label: &Label,
         selected_object_id: Option<i32>,
         image_rect: Rect,
         image_size: Vec2,
@@ -805,7 +810,8 @@ impl Canvas {
         // Only check selected object
         if let Some(selected_id) = selected_object_id {
             if let Some(roi_index) = crate::state::roi_index_from_id(selected_id) {
-                if let Some(roi_points) = annotation.rois.get(roi_index) {
+                if let Some(roi) = label.rois.get(roi_index) {
+                    let roi_points = &roi.0;
                     for i in 0..roi_points.len() {
                         let p1 = &roi_points[i];
                         let p2 = &roi_points[(i + 1) % roi_points.len()];
@@ -822,10 +828,11 @@ impl Canvas {
                         }
                     }
                 }
-            } else if let Some(obj) = annotation.objects.iter().find(|o| o.id == selected_id) {
-                for i in 0..obj.polygon.len() {
-                    let p1 = &obj.polygon[i];
-                    let p2 = &obj.polygon[(i + 1) % obj.polygon.len()];
+            } else if let Some(obj) = label.objects.iter().find(|o| o.id == selected_id) {
+                let obj_points = &obj.polygon.0;
+                for i in 0..obj_points.len() {
+                    let p1 = &obj_points[i];
+                    let p2 = &obj_points[(i + 1) % obj_points.len()];
 
                     let t = Self::segment_parameter(p1, p2, &normalized_pos);
                     if !(0.1..=0.9).contains(&t) {
@@ -849,21 +856,21 @@ impl Canvas {
     fn find_object_at_pos(
         &self,
         pos: Pos2,
-        annotation: &Annotation,
+        label: &Label,
         image_rect: Rect,
         image_size: Vec2,
     ) -> Option<i32> {
         let normalized_pos = self.screen_to_normalized(pos, image_rect, image_size);
 
         // Check objects in reverse order (top to bottom)
-        for obj in annotation.objects.iter().rev() {
-            if crate::geometry::point_in_polygon(&normalized_pos, &obj.polygon) {
+        for obj in label.objects.iter().rev() {
+            if crate::geometry::point_in_polygon(&normalized_pos, &obj.polygon.0) {
                 return Some(obj.id);
             }
         }
 
-        for (idx, roi_points) in annotation.rois.iter().enumerate().rev() {
-            if crate::geometry::point_in_polygon(&normalized_pos, roi_points) {
+        for (idx, roi) in label.rois.iter().enumerate().rev() {
+            if crate::geometry::point_in_polygon(&normalized_pos, &roi.0) {
                 return Some(crate::state::roi_id_from_index(idx));
             }
         }
@@ -875,7 +882,7 @@ impl Canvas {
     fn find_smallest_object_at_pos(
         &self,
         pos: Pos2,
-        annotation: &Annotation,
+        label: &Label,
         image_rect: Rect,
         image_size: Vec2,
     ) -> Option<i32> {
@@ -883,9 +890,9 @@ impl Canvas {
         let mut best: Option<(i32, f32)> = None;
         let eps = 1e-6;
 
-        for obj in annotation.objects.iter().rev() {
-            if crate::geometry::point_in_polygon(&normalized_pos, &obj.polygon) {
-                let area = Self::polygon_area(&obj.polygon);
+        for obj in label.objects.iter().rev() {
+            if crate::geometry::point_in_polygon(&normalized_pos, &obj.polygon.0) {
+                let area = Self::polygon_area(&obj.polygon.0);
                 match best {
                     None => best = Some((obj.id, area)),
                     Some((_, best_area)) => {
@@ -897,9 +904,9 @@ impl Canvas {
             }
         }
 
-        for (idx, roi_points) in annotation.rois.iter().enumerate().rev() {
-            if crate::geometry::point_in_polygon(&normalized_pos, roi_points) {
-                let area = Self::polygon_area(roi_points);
+        for (idx, roi) in label.rois.iter().enumerate().rev() {
+            if crate::geometry::point_in_polygon(&normalized_pos, &roi.0) {
+                let area = Self::polygon_area(&roi.0);
                 match best {
                     None => best = Some((crate::state::roi_id_from_index(idx), area)),
                     Some((_, best_area)) => {
@@ -918,7 +925,7 @@ impl Canvas {
     fn determine_cursor(
         &self,
         pos: Pos2,
-        annotation: Option<&Annotation>,
+        label: Option<&Label>,
         selected_object_id: Option<i32>,
         image_rect: Rect,
         image_size: Vec2,
@@ -941,10 +948,10 @@ impl Canvas {
 
         // Check what's under the cursor
         if edit_mode == crate::state::EditMode::Editing {
-            if let Some(annotation) = annotation {
+            if let Some(label) = label {
                 // Check for edge (to add vertex)
                 if self
-                    .find_edge_at_pos(pos, annotation, selected_object_id, image_rect, image_size)
+                    .find_edge_at_pos(pos, label, selected_object_id, image_rect, image_size)
                     .is_some()
                 {
                     return egui::CursorIcon::Crosshair;
@@ -952,16 +959,14 @@ impl Canvas {
 
                 // Check for vertex
                 if self
-                    .find_vertex_at_pos(pos, annotation, selected_object_id, image_rect, image_size)
+                    .find_vertex_at_pos(pos, label, selected_object_id, image_rect, image_size)
                     .is_some()
                 {
                     return egui::CursorIcon::PointingHand;
                 }
 
                 // Check for object (selected only)
-                if let Some(obj_id) =
-                    self.find_object_at_pos(pos, annotation, image_rect, image_size)
-                {
+                if let Some(obj_id) = self.find_object_at_pos(pos, label, image_rect, image_size) {
                     if Some(obj_id) == selected_object_id {
                         return egui::CursorIcon::Grab;
                     }
@@ -973,7 +978,7 @@ impl Canvas {
         egui::CursorIcon::Default
     }
 
-    fn segment_parameter(a: &Point, b: &Point, p: &Point) -> f32 {
+    fn segment_parameter(a: &Point<f32>, b: &Point<f32>, p: &Point<f32>) -> f32 {
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         let denom = dx * dx + dy * dy;
@@ -1040,7 +1045,7 @@ impl Canvas {
 #[derive(Default)]
 pub struct CanvasResponse {
     /// Clicked position in normalized coordinates
-    pub clicked_pos: Option<Point>,
+    pub clicked_pos: Option<Point<f32>>,
 
     /// Right click occurred
     pub right_clicked: bool,
@@ -1049,13 +1054,13 @@ pub struct CanvasResponse {
     pub canvas_rect: Option<Rect>,
 
     /// Vertex dragged (object_id, vertex_index, new_position)
-    pub vertex_dragged: Option<(i32, usize, Point)>,
+    pub vertex_dragged: Option<(i32, usize, Point<f32>)>,
 
     /// Object dragged (object_id, offset)
-    pub object_dragged: Option<(i32, Point)>,
+    pub object_dragged: Option<(i32, Point<f32>)>,
 
     /// Vertex added (object_id, edge_index, new_position)
-    pub vertex_added: Option<(i32, usize, Point)>,
+    pub vertex_added: Option<(i32, usize, Point<f32>)>,
 
     /// Vertex deleted (object_id, vertex_index)
     pub vertex_deleted: Option<(i32, usize)>,
@@ -1079,7 +1084,7 @@ pub struct CanvasResponse {
     pub finish_drawing: bool,
 
     /// Double-clicked position in Drawing mode (normalized)
-    pub finish_drawing_pos: Option<Point>,
+    pub finish_drawing_pos: Option<Point<f32>>,
 }
 
 /// Parse color string (hex format like "#FF0000")

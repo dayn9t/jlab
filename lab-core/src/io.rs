@@ -1,30 +1,30 @@
-use crate::{Annotation, Meta, Result};
+use crate::{Label, LabelMeta, Result};
 use std::fs;
 use std::path::Path;
 
 /// Load metadata from a YAML file
-pub fn load_meta<P: AsRef<Path>>(path: P) -> Result<Meta> {
+pub fn load_meta<P: AsRef<Path>>(path: P) -> Result<LabelMeta> {
     let content = fs::read_to_string(path)?;
-    let meta: Meta = serde_yaml::from_str(&content)?;
+    let meta: LabelMeta = serde_yaml::from_str(&content)?;
     Ok(meta)
 }
 
 /// Save metadata to a YAML file
-pub fn save_meta<P: AsRef<Path>>(path: P, meta: &Meta) -> Result<()> {
+pub fn save_meta<P: AsRef<Path>>(path: P, meta: &LabelMeta) -> Result<()> {
     let yaml = serde_yaml::to_string(meta)?;
     fs::write(path, yaml)?;
     Ok(())
 }
 
 /// Load annotation from a YAML file
-pub fn load_annotation<P: AsRef<Path>>(path: P) -> Result<Annotation> {
+pub fn load_annotation<P: AsRef<Path>>(path: P) -> Result<Label> {
     let content = fs::read_to_string(path)?;
-    let annotation: Annotation = serde_yaml::from_str(&content)?;
+    let annotation: Label = serde_yaml::from_str(&content)?;
     Ok(annotation)
 }
 
 /// Save annotation to a YAML file
-pub fn save_annotation<P: AsRef<Path>>(path: P, annotation: &Annotation) -> Result<()> {
+pub fn save_annotation<P: AsRef<Path>>(path: P, annotation: &Label) -> Result<()> {
     let yaml = serde_yaml::to_string(annotation)?;
     fs::write(path, yaml)?;
     Ok(())
@@ -33,8 +33,8 @@ pub fn save_annotation<P: AsRef<Path>>(path: P, annotation: &Annotation) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::annotation::Object;
-    use crate::geometry::Point;
+    use crate::annotation::{add_object, new_label, new_object};
+    use crate::{Point, Polygon};
     use std::fs;
 
     #[test]
@@ -42,27 +42,27 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let test_file = temp_dir.join("test_annotation.yaml");
 
-        let mut annotation = Annotation::new("test-tool");
-        let obj = Object::new(
+        let mut label = new_label("test-tool");
+        let obj = new_object(
             0,
             1,
-            vec![
-                Point::new(0.1, 0.1),
-                Point::new(0.5, 0.1),
-                Point::new(0.5, 0.5),
-                Point::new(0.1, 0.5),
-            ],
+            Polygon::from(vec![
+                Point { x: 0.1, y: 0.1 },
+                Point { x: 0.5, y: 0.1 },
+                Point { x: 0.5, y: 0.5 },
+                Point { x: 0.1, y: 0.5 },
+            ]),
         );
-        annotation.add_object(obj);
+        add_object(&mut label, obj);
 
         // Save
-        save_annotation(&test_file, &annotation).unwrap();
+        save_annotation(&test_file, &label).unwrap();
 
         // Load
         let loaded = load_annotation(&test_file).unwrap();
 
-        assert_eq!(loaded.version, annotation.version);
-        assert_eq!(loaded.objects.len(), annotation.objects.len());
+        assert_eq!(loaded.version, label.version);
+        assert_eq!(loaded.objects.len(), label.objects.len());
 
         // Cleanup
         let _ = fs::remove_file(test_file);
