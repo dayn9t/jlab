@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'git diff --quiet || echo \"⚠ Uncommitted changes detected\"'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=\"$CLAUDE_FILE_PATH\"; if [[ \"$FILE\" == *.rs ]]; then cargo fmt -- \"\" 2>/dev/null; fi'"
+          }
+        ]
+      }
+    ]
+  },
+  "claudeMdExcludes": ["vendor/"],
+  "permissions": {
+    "deny": [
+      "Read(target/**)",
+      "Read(vendor/**)",
+      "Read(dist/**)",
+      "Read(*.pdb)",
+      "Read(*.test)",
+      "Read(*.bak)"
+    ]
+  }
+}

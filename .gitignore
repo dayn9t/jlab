@@ -38,3 +38,7 @@ Thumbs.db
 *.ttc
 
 dist/
+
+# Claude Code local settings
+.claude/settings.local.json
+CLAUDE.local.md
