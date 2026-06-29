@@ -10,5 +10,4 @@ serde_json.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
-v3-types = { path = "../../v3/engine/v3-types" }
-rx-core = { path = "/home/jiang/rs/rx/rx-core" }
+v3-types = { path = "/home/jiang/cc/video/v3/engine/v3-types" }

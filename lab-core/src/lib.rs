@@ -14,24 +14,12 @@ pub use annotation::{
     remove_object_property, set_object_property, touch,
 };
 
-// Re-export v3-types types used throughout lab-core
-pub use v3_types::{
-    // Meta types
-    CatDef,
-    CatProperty,
-    // Annotation types
-    Label,
-    LabelMeta,
-    Object,
-    // Geometry
-    Point,
-    Polygon,
-    PropDef,
-    PropertyEntry,
-    RoiConfig,
-    ShapeConfig,
-    SpecialValue,
-    ValueDef,
+// Re-export v3-types types used throughout lab-core.
+// v3-types 2026-06 重组：符号移入子模块（label / label_meta）；几何类型仍根 re-export。
+pub use v3_types::{Point, Polygon};
+pub use v3_types::label::{Label, Object, PropertyEntry};
+pub use v3_types::label_meta::{
+    CatDef, CatProperty, LabelMeta, PropDef, RoiConfig, ShapeConfig, SpecialValue, ValueDef,
 };
 
 pub use error::{Error, Result};
