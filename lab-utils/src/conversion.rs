@@ -1,7 +1,12 @@
+use crate::Project;
+use anyhow::Context;
+use image::GenericImageView;
 use lab_core::export::{coco::CocoExporter, voc::VocExporter, yolo::YoloExporter, Exporter};
 use lab_core::{Label, LabelMeta, Result};
+use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Export format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,10 +56,121 @@ pub fn export_coco_batch<P: AsRef<Path>>(
     Ok(())
 }
 
+pub struct ExportItem {
+    pub image_path: PathBuf,
+    pub file_name: String,
+    pub stem: String,
+    pub width: u32,
+    pub height: u32,
+    pub annotation: Label,
+}
+
+pub fn collect_export_items(project: &Project) -> anyhow::Result<Vec<ExportItem>> {
+    let mut items = Vec::new();
+    for image_path in project.list_images()? {
+        let file_name = image_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .context("Invalid image name")?
+            .to_string();
+        let stem = Path::new(&file_name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&file_name)
+            .to_string();
+
+        let (width, height) = image::open(&image_path)
+            .with_context(|| format!("Failed to read image {:?}", image_path))?
+            .dimensions();
+
+        let annotation =
+            project.load_annotation(&file_name)?.unwrap_or_else(|| lab_core::new_label("export"));
+
+        items.push(ExportItem { image_path, file_name, stem, width, height, annotation });
+    }
+    Ok(items)
+}
+
+pub fn export_labelme_annotation(
+    output_path: &Path,
+    item: &ExportItem,
+    meta: &LabelMeta,
+) -> anyhow::Result<()> {
+    let mut shapes = Vec::new();
+    for obj in &item.annotation.objects {
+        if obj.polygon.0.len() < 3 {
+            continue;
+        }
+        let label = lab_core::find_category(meta, obj.category)
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+        let points = obj
+            .polygon
+            .0
+            .iter()
+            .map(|point| {
+                vec![(point.x * item.width as f32) as f64, (point.y * item.height as f32) as f64]
+            })
+            .collect();
+
+        shapes.push(LabelMeShapeOut {
+            label,
+            points,
+            group_id: None,
+            shape_type: "polygon".to_string(),
+            flags: HashMap::new(),
+        });
+    }
+
+    let labelme = LabelMeOut {
+        version: "5.0.1".to_string(),
+        flags: HashMap::new(),
+        shapes,
+        image_path: item.file_name.clone(),
+        image_data: None,
+        image_height: item.height,
+        image_width: item.width,
+    };
+
+    let content = serde_json::to_string_pretty(&labelme)?;
+    fs::write(output_path, content)?;
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct LabelMeOut {
+    version: String,
+    flags: HashMap<String, serde_json::Value>,
+    shapes: Vec<LabelMeShapeOut>,
+    #[serde(rename = "imagePath")]
+    image_path: String,
+    #[serde(rename = "imageData")]
+    image_data: Option<String>,
+    #[serde(rename = "imageHeight")]
+    image_height: u32,
+    #[serde(rename = "imageWidth")]
+    image_width: u32,
+}
+
+#[derive(Serialize)]
+struct LabelMeShapeOut {
+    label: String,
+    points: Vec<Vec<f64>>,
+    #[serde(rename = "group_id")]
+    group_id: Option<i32>,
+    #[serde(rename = "shape_type")]
+    shape_type: String,
+    flags: HashMap<String, serde_json::Value>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::import::tests::test_meta;
+    use crate::Project;
+    use lab_core::io::save_meta;
     use lab_core::{new_label, new_object, CatDef, Point, Polygon, RoiConfig, ShapeConfig};
+    use std::fs;
 
     #[test]
     fn test_export_yolo() {
@@ -112,5 +228,26 @@ mod tests {
 
         // Cleanup
         let _ = fs::remove_file(output_path);
+    }
+
+    #[test]
+    fn collect_export_items_reads_dimensions_and_default_label() {
+        let root = std::env::temp_dir().join(format!("lab-utils-cv-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("images")).unwrap();
+        fs::create_dir_all(root.join("labels")).unwrap();
+        save_meta(root.join("meta.yaml"), &test_meta()).unwrap();
+        // real 4x2 png so image::open works
+        image::RgbImage::from_pixel(4, 2, image::Rgb([0, 0, 0]))
+            .save(root.join("images/p.png"))
+            .unwrap();
+
+        let project = Project::open(&root).unwrap();
+        let items = collect_export_items(&project).unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!((items[0].width, items[0].height), (4, 2));
+        assert_eq!(items[0].annotation.objects.len(), 0); // no yaml -> empty label
+        let _ = fs::remove_dir_all(&root);
     }
 }

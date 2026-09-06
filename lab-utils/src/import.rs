@@ -584,7 +584,7 @@ struct LabelMeShape {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::Project;
     use lab_core::{CatDef, RoiConfig, ShapeConfig};
