@@ -29,6 +29,13 @@ cargo run --release -p lab-gui
 cargo run --release -p lab-gui -- /path/to/project
 ```
 
+### 格式转换 CLI（非交互）
+
+```bash
+cargo run --release -p lab-utils --bin lab-convert -- import --format yolo <src_root> <project_dir>
+cargo run --release -p lab-utils --bin lab-convert -- export --format coco <project_dir> <out_dir>
+```
+
 ## 项目结构
 
 ```
