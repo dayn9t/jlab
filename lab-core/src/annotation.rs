@@ -4,8 +4,8 @@
 //! 并提供构造和操作辅助函数。
 
 use chrono::Local;
-pub use v3_types::{Point, Polygon};
 pub use v3_types::label::{Label, Object, PropertyEntry};
+pub use v3_types::{Point, Polygon};
 
 /// 创建一个空的 Label。
 pub fn new_label(user_agent: impl Into<String>) -> Label {

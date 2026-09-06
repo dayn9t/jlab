@@ -13,7 +13,8 @@ use std::path::PathBuf;
 
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
-    let project_dir = PathBuf::from(args.next().context("usage: export_yolo <project_dir> <out_dir>")?);
+    let project_dir =
+        PathBuf::from(args.next().context("usage: export_yolo <project_dir> <out_dir>")?);
     let out_dir = PathBuf::from(args.next().context("usage: export_yolo <project_dir> <out_dir>")?);
 
     let project = Project::open(&project_dir)?;
@@ -24,15 +25,16 @@ fn main() -> Result<()> {
     let mut total_boxes = 0usize;
 
     for image in project.list_images()? {
-        let name = image
-            .file_name()
-            .and_then(|s| s.to_str())
-            .context("invalid image name")?
-            .to_string();
+        let name =
+            image.file_name().and_then(|s| s.to_str()).context("invalid image name")?.to_string();
         let Some(annotation) = project.load_annotation(&name)? else {
             continue;
         };
-        let stem = name.strip_suffix(".jpg").or_else(|| name.strip_suffix(".jpeg")).or_else(|| name.strip_suffix(".png")).unwrap_or(&name);
+        let stem = name
+            .strip_suffix(".jpg")
+            .or_else(|| name.strip_suffix(".jpeg"))
+            .or_else(|| name.strip_suffix(".png"))
+            .unwrap_or(&name);
         export_annotation(
             out_labels.join(format!("{stem}.txt")),
             &annotation,
