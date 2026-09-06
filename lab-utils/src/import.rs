@@ -2,6 +2,8 @@
 
 use anyhow::Context;
 use lab_core::{Label, LabelMeta, Object, Point, Polygon};
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -144,6 +146,81 @@ pub fn import_from_voc(root: &Path, meta: &LabelMeta) -> anyhow::Result<Vec<Impo
     Ok(imported)
 }
 
+pub fn import_from_coco(
+    json_path: &Path,
+    images_dir: &Path,
+    meta: &LabelMeta,
+) -> anyhow::Result<Vec<ImportedImage>> {
+    let content = fs::read_to_string(json_path)?;
+    let dataset: CocoDataset = serde_json::from_str(&content)?;
+
+    let mut category_map = HashMap::new();
+    for cat in &dataset.categories {
+        if lab_core::find_category(meta, cat.id).is_some() {
+            category_map.insert(cat.id, cat.id);
+        } else if let Some(id) = find_category_id_by_name(meta, &cat.name) {
+            category_map.insert(cat.id, id);
+        }
+    }
+
+    let mut annotations_by_image: HashMap<i32, Vec<CocoAnnotation>> = HashMap::new();
+    for ann in dataset.annotations {
+        annotations_by_image.entry(ann.image_id).or_default().push(ann);
+    }
+
+    let mut imported = Vec::new();
+    for image in dataset.images {
+        let file_name = Path::new(&image.file_name)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .context("Invalid image name")?
+            .to_string();
+        let source_path = images_dir.join(&image.file_name);
+        if !source_path.exists() {
+            return Err(anyhow::anyhow!(format!("Missing image file: {:?}", source_path)));
+        }
+
+        let mut objects = Vec::new();
+        if let Some(anns) = annotations_by_image.get(&image.id) {
+            for ann in anns {
+                let category_id = match category_map.get(&ann.category_id) {
+                    Some(id) => *id,
+                    None => {
+                        log::warn!(
+                            "Unknown category id {} for image {}",
+                            ann.category_id,
+                            image.file_name
+                        );
+                        continue;
+                    }
+                };
+
+                let polygon = if let Some(segmentation) = ann.segmentation.as_ref() {
+                    if let Some(points) =
+                        coco_segmentation_to_polygon(segmentation, image.width, image.height)
+                    {
+                        points
+                    } else {
+                        bbox_to_polygon(&ann.bbox, image.width, image.height)
+                    }
+                } else {
+                    bbox_to_polygon(&ann.bbox, image.width, image.height)
+                };
+
+                if !polygon.is_valid() {
+                    continue;
+                }
+                objects.push(lab_core::new_object(0, category_id, polygon));
+            }
+        }
+
+        let annotation = build_label(objects, "import");
+        imported.push(ImportedImage { source_path, file_name, annotation });
+    }
+
+    Ok(imported)
+}
+
 pub fn list_images_in_dir(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut images = Vec::new();
     for entry in fs::read_dir(dir)? {
@@ -259,6 +336,55 @@ fn extract_tag_value(content: &str, tag: &str) -> Option<String> {
     Some(content[start..end].trim().to_string())
 }
 
+fn bbox_to_polygon(bbox: &[f32], width: u32, height: u32) -> Polygon<f32> {
+    if bbox.len() < 4 || width == 0 || height == 0 {
+        return Polygon::empty();
+    }
+    let x = bbox[0] / width as f32;
+    let y = bbox[1] / height as f32;
+    let w = bbox[2] / width as f32;
+    let h = bbox[3] / height as f32;
+    rect_polygon(x, y, x + w, y + h)
+}
+
+fn coco_segmentation_to_polygon(
+    segmentation: &serde_json::Value,
+    width: u32,
+    height: u32,
+) -> Option<Polygon<f32>> {
+    let coords = match segmentation {
+        serde_json::Value::Array(items) => {
+            if items.is_empty() {
+                return None;
+            }
+            if items[0].is_array() {
+                items[0].as_array()?.clone()
+            } else {
+                items.clone()
+            }
+        }
+        _ => return None,
+    };
+
+    let mut points = Vec::new();
+    let mut iter = coords.iter().filter_map(|v| v.as_f64());
+    while let (Some(x), Some(y)) = (iter.next(), iter.next()) {
+        if width == 0 || height == 0 {
+            break;
+        }
+        points.push(Point {
+            x: clamp01(x as f32 / width as f32),
+            y: clamp01(y as f32 / height as f32),
+        });
+    }
+
+    if points.len() >= 3 {
+        Some(Polygon::from(points))
+    } else {
+        None
+    }
+}
+
 #[derive(Debug)]
 struct VocObject {
     label: String,
@@ -266,6 +392,37 @@ struct VocObject {
     ymin: f32,
     xmax: f32,
     ymax: f32,
+}
+
+#[derive(Debug, Deserialize)]
+struct CocoDataset {
+    images: Vec<CocoImage>,
+    annotations: Vec<CocoAnnotation>,
+    categories: Vec<CocoCategory>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CocoImage {
+    id: i32,
+    file_name: String,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct CocoCategory {
+    id: i32,
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CocoAnnotation {
+    image_id: i32,
+    category_id: i32,
+    #[serde(default)]
+    bbox: Vec<f32>,
+    #[serde(default)]
+    segmentation: Option<serde_json::Value>,
 }
 
 #[cfg(test)]
@@ -376,5 +533,31 @@ mod tests {
     fn import_from_voc_requires_dirs() {
         let err = import_from_voc(&temp_root("voc-bad"), &test_meta());
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn import_from_coco_maps_categories_and_segmentation() {
+        let root = temp_root("coco");
+        fs::write(root.join("a.jpg"), b"fake").unwrap();
+        fs::write(
+            root.join("ann.json"),
+            r#"{"images":[{"id":1,"file_name":"a.jpg","width":100,"height":100}],
+                "annotations":[
+                  {"image_id":1,"category_id":7,"bbox":[10,10,20,20]},
+                  {"image_id":1,"category_id":8,"bbox":[0,0,0,0],
+                   "segmentation":[[10.0,10.0, 30.0,10.0, 30.0,30.0]]}],
+                "categories":[{"id":7,"name":"person"},{"id":8,"name":"person"}]}"#,
+        )
+        .unwrap();
+
+        let imported = import_from_coco(&root.join("ann.json"), &root, &test_meta()).unwrap();
+
+        let label = imported[0].annotation.as_ref().unwrap();
+        assert_eq!(label.objects.len(), 2);
+        // category 7 named "person" -> mapped to meta id 0
+        assert_eq!(label.objects[0].category, 0);
+        // segmentation polygon (not bbox)
+        assert_eq!(label.objects[1].polygon.0.len(), 3);
+        let _ = fs::remove_dir_all(&root);
     }
 }
