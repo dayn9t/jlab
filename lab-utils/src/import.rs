@@ -4,6 +4,7 @@ use anyhow::Context;
 use lab_core::{Label, LabelMeta, Object, Point, Polygon};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -273,6 +274,38 @@ pub fn import_from_labelme(root: &Path, meta: &LabelMeta) -> anyhow::Result<Vec<
     }
 
     Ok(imported)
+}
+
+pub fn merge_imported_images(
+    imported: Vec<ImportedImage>,
+    project: &crate::Project,
+    existing_names: &HashSet<String>,
+    duplicate_template: &str,
+) -> anyhow::Result<()> {
+    let mut incoming_names = HashSet::new();
+    for item in &imported {
+        if existing_names.contains(&item.file_name) {
+            return Err(anyhow::anyhow!(duplicate_template.replace("{name}", &item.file_name)));
+        }
+        if !incoming_names.insert(item.file_name.clone()) {
+            return Err(anyhow::anyhow!(duplicate_template.replace("{name}", &item.file_name)));
+        }
+    }
+
+    fs::create_dir_all(project.images_dir())?;
+    fs::create_dir_all(project.labels_dir())?;
+
+    for item in imported {
+        let dest_image = project.images_dir().join(&item.file_name);
+        fs::copy(&item.source_path, &dest_image)?;
+
+        if let Some(annotation) = item.annotation {
+            let label_path = project.annotation_path(&item.file_name);
+            lab_core::io::save_annotation(&label_path, &annotation)?;
+        }
+    }
+
+    Ok(())
 }
 
 pub fn list_images_in_dir(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
@@ -553,6 +586,7 @@ struct LabelMeShape {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Project;
     use lab_core::{CatDef, RoiConfig, ShapeConfig};
 
     pub(crate) fn test_meta() -> LabelMeta {
@@ -705,6 +739,63 @@ mod tests {
         assert_eq!(label.objects[0].category, 0);
         assert_eq!(label.objects[0].polygon.0.len(), 3);
         assert_eq!(label.objects[0].polygon.0[0], Point { x: 0.1, y: 0.1 });
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    fn make_project(tag: &str) -> (PathBuf, Project) {
+        let root = temp_root(tag);
+        let meta = test_meta();
+        lab_core::io::save_meta(root.join("meta.yaml"), &meta).unwrap();
+        let project = Project::open(&root).unwrap();
+        (root, project)
+    }
+
+    fn image(path: &Path, name: &str) -> ImportedImage {
+        ImportedImage {
+            source_path: path.to_path_buf(),
+            file_name: name.to_string(),
+            annotation: None,
+        }
+    }
+
+    #[test]
+    fn merge_copies_image_and_writes_annotation() {
+        let (root, project) = make_project("merge-ok");
+        let src = root.join("src.jpg");
+        fs::write(&src, b"fake").unwrap();
+        let ann = lab_core::new_label("test");
+
+        merge_imported_images(
+            vec![ImportedImage {
+                source_path: src.clone(),
+                file_name: "src.jpg".to_string(),
+                annotation: Some(ann),
+            }],
+            &project,
+            &Default::default(),
+            "duplicate: {name}",
+        )
+        .unwrap();
+
+        assert!(project.images_dir().join("src.jpg").exists());
+        assert!(project.annotation_path("src.jpg").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn merge_rejects_duplicate_names() {
+        let (root, project) = make_project("merge-dup");
+        let src = root.join("x.jpg");
+        fs::write(&src, b"fake").unwrap();
+
+        let err = merge_imported_images(
+            vec![image(&src, "dup.jpg"), image(&src, "dup.jpg")],
+            &project,
+            &Default::default(),
+            "duplicate: {name}",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("duplicate: dup.jpg"));
         let _ = fs::remove_dir_all(&root);
     }
 }
