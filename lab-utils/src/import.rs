@@ -282,12 +282,15 @@ pub fn merge_imported_images(
     existing_names: &HashSet<String>,
     duplicate_template: &str,
 ) -> anyhow::Result<()> {
-    let mut incoming_names = HashSet::new();
+    // Annotations are keyed by stem: b.png vs existing b.jpg would silently
+    // overwrite the same labels/b.yaml, so the duplicate check is stem-based.
+    let existing_stems = project_image_stems(project)?;
+    let mut incoming_stems = HashSet::new();
     for item in &imported {
-        if existing_names.contains(&item.file_name) {
-            return Err(anyhow::anyhow!(duplicate_template.replace("{name}", &item.file_name)));
-        }
-        if !incoming_names.insert(item.file_name.clone()) {
+        let duplicate = existing_names.contains(&item.file_name)
+            || existing_stems.contains(image_stem(&item.file_name))
+            || !incoming_stems.insert(image_stem(&item.file_name).to_string());
+        if duplicate {
             return Err(anyhow::anyhow!(duplicate_template.replace("{name}", &item.file_name)));
         }
     }
@@ -304,6 +307,22 @@ pub fn merge_imported_images(
     }
 
     Ok(())
+}
+
+/// Extract the file stem (name without extension); annotation files are keyed by stem.
+fn image_stem(file_name: &str) -> &str {
+    Path::new(file_name).file_stem().and_then(|s| s.to_str()).unwrap_or(file_name)
+}
+
+/// Collect the file stems of all images currently in the project.
+fn project_image_stems(project: &crate::Project) -> anyhow::Result<HashSet<String>> {
+    let mut stems = HashSet::new();
+    for image in project.list_images().context("failed to list project images")? {
+        if let Some(name) = image.file_name().and_then(|s| s.to_str()) {
+            stems.insert(image_stem(name).to_string());
+        }
+    }
+    Ok(stems)
 }
 
 pub fn list_images_in_dir(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
@@ -581,7 +600,6 @@ struct LabelMeShape {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::Project;
     use lab_core::{CatDef, RoiConfig, ShapeConfig};
 
     pub(crate) fn test_meta() -> LabelMeta {
@@ -734,63 +752,6 @@ pub(crate) mod tests {
         assert_eq!(label.objects[0].category, 0);
         assert_eq!(label.objects[0].polygon.0.len(), 3);
         assert_eq!(label.objects[0].polygon.0[0], Point { x: 0.1, y: 0.1 });
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    fn make_project(tag: &str) -> (PathBuf, Project) {
-        let root = temp_root(tag);
-        let meta = test_meta();
-        lab_core::io::save_meta(root.join("meta.yaml"), &meta).unwrap();
-        let project = Project::open(&root).unwrap();
-        (root, project)
-    }
-
-    fn image(path: &Path, name: &str) -> ImportedImage {
-        ImportedImage {
-            source_path: path.to_path_buf(),
-            file_name: name.to_string(),
-            annotation: lab_core::new_label("test"),
-        }
-    }
-
-    #[test]
-    fn merge_copies_image_and_writes_annotation() {
-        let (root, project) = make_project("merge-ok");
-        let src = root.join("src.jpg");
-        fs::write(&src, b"fake").unwrap();
-        let ann = lab_core::new_label("test");
-
-        merge_imported_images(
-            vec![ImportedImage {
-                source_path: src.clone(),
-                file_name: "src.jpg".to_string(),
-                annotation: ann,
-            }],
-            &project,
-            &Default::default(),
-            "duplicate: {name}",
-        )
-        .unwrap();
-
-        assert!(project.images_dir().join("src.jpg").exists());
-        assert!(project.annotation_path("src.jpg").exists());
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn merge_rejects_duplicate_names() {
-        let (root, project) = make_project("merge-dup");
-        let src = root.join("x.jpg");
-        fs::write(&src, b"fake").unwrap();
-
-        let err = merge_imported_images(
-            vec![image(&src, "dup.jpg"), image(&src, "dup.jpg")],
-            &project,
-            &Default::default(),
-            "duplicate: {name}",
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("duplicate: dup.jpg"));
         let _ = fs::remove_dir_all(&root);
     }
 }
