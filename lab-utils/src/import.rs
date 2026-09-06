@@ -221,6 +221,60 @@ pub fn import_from_coco(
     Ok(imported)
 }
 
+pub fn import_from_labelme(root: &Path, meta: &LabelMeta) -> anyhow::Result<Vec<ImportedImage>> {
+    let mut imported = Vec::new();
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+
+        let content = fs::read_to_string(&path)?;
+        let labelme: LabelMeFile = serde_json::from_str(&content)?;
+
+        let file_name = if let Some(image_path) = labelme.image_path.as_ref() {
+            Path::new(image_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .context("Invalid image name")?
+                .to_string()
+        } else {
+            let stem =
+                path.file_stem().and_then(|s| s.to_str()).context("Invalid label file name")?;
+            find_image_by_stem(root, stem)?
+        };
+
+        let source_path = root.join(&file_name);
+        if !source_path.exists() {
+            return Err(anyhow::anyhow!(format!("Missing image file: {:?}", source_path)));
+        }
+
+        let mut objects = Vec::new();
+        for shape in labelme.shapes {
+            let category_id = match find_category_id_by_name(meta, &shape.label) {
+                Some(id) => id,
+                None => {
+                    log::warn!("Unknown category name {} in {:?}", shape.label, path);
+                    continue;
+                }
+            };
+
+            let polygon =
+                labelme_shape_to_polygon(&shape, labelme.image_width, labelme.image_height);
+            if polygon.0.len() < 3 {
+                continue;
+            }
+            objects.push(lab_core::new_object(0, category_id, polygon));
+        }
+
+        let annotation = build_label(objects, "import");
+        imported.push(ImportedImage { source_path, file_name, annotation });
+    }
+
+    Ok(imported)
+}
+
 pub fn list_images_in_dir(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut images = Vec::new();
     for entry in fs::read_dir(dir)? {
@@ -385,6 +439,57 @@ fn coco_segmentation_to_polygon(
     }
 }
 
+fn labelme_shape_to_polygon(shape: &LabelMeShape, width: u32, height: u32) -> Polygon<f32> {
+    if width == 0 || height == 0 {
+        return Polygon::empty();
+    }
+    let shape_type = shape.shape_type.as_deref().unwrap_or("polygon").to_lowercase();
+
+    let polygon = match shape_type.as_str() {
+        "rectangle" if shape.points.len() >= 2 => {
+            let p1 = &shape.points[0];
+            let p2 = &shape.points[1];
+            if p1.len() < 2 || p2.len() < 2 {
+                return Polygon::empty();
+            }
+            let x1 = p1[0] as f32 / width as f32;
+            let y1 = p1[1] as f32 / height as f32;
+            let x2 = p2[0] as f32 / width as f32;
+            let y2 = p2[1] as f32 / height as f32;
+            rect_polygon(x1, y1, x2, y2)
+        }
+        _ => Polygon::from(
+            shape
+                .points
+                .iter()
+                .filter_map(|p| {
+                    if p.len() < 2 {
+                        None
+                    } else {
+                        Some(Point {
+                            x: clamp01(p[0] as f32 / width as f32),
+                            y: clamp01(p[1] as f32 / height as f32),
+                        })
+                    }
+                })
+                .collect::<Vec<_>>(),
+        ),
+    };
+
+    polygon
+}
+
+fn find_image_by_stem(root: &Path, stem: &str) -> anyhow::Result<String> {
+    let candidates = ["jpg", "jpeg", "png"];
+    for ext in candidates {
+        let path = root.join(format!("{}.{}", stem, ext));
+        if path.exists() {
+            return Ok(format!("{}.{}", stem, ext));
+        }
+    }
+    Err(anyhow::anyhow!("Cannot find image for {}", stem))
+}
+
 #[derive(Debug)]
 struct VocObject {
     label: String,
@@ -423,6 +528,26 @@ struct CocoAnnotation {
     bbox: Vec<f32>,
     #[serde(default)]
     segmentation: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LabelMeFile {
+    #[serde(rename = "imagePath")]
+    image_path: Option<String>,
+    #[serde(rename = "imageHeight")]
+    image_height: u32,
+    #[serde(rename = "imageWidth")]
+    image_width: u32,
+    #[serde(default)]
+    shapes: Vec<LabelMeShape>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LabelMeShape {
+    label: String,
+    points: Vec<Vec<f64>>,
+    #[serde(rename = "shape_type")]
+    shape_type: Option<String>,
 }
 
 #[cfg(test)]
@@ -558,6 +683,28 @@ mod tests {
         assert_eq!(label.objects[0].category, 0);
         // segmentation polygon (not bbox)
         assert_eq!(label.objects[1].polygon.0.len(), 3);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn import_from_labelme_parses_polygon_shapes() {
+        let root = temp_root("labelme");
+        fs::write(root.join("a.jpg"), b"fake").unwrap();
+        fs::write(
+            root.join("a.json"),
+            r#"{"imagePath":"a.jpg","imageHeight":100,"imageWidth":100,
+                "shapes":[{"label":"person","shape_type":"polygon",
+                           "points":[[10.0,10.0],[30.0,10.0],[30.0,30.0]]}]}"#,
+        )
+        .unwrap();
+
+        let imported = import_from_labelme(&root, &test_meta()).unwrap();
+
+        let label = imported[0].annotation.as_ref().unwrap();
+        assert_eq!(label.objects.len(), 1);
+        assert_eq!(label.objects[0].category, 0);
+        assert_eq!(label.objects[0].polygon.0.len(), 3);
+        assert_eq!(label.objects[0].polygon.0[0], Point { x: 0.1, y: 0.1 });
         let _ = fs::remove_dir_all(&root);
     }
 }
