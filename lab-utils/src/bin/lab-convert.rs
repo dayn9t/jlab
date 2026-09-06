@@ -64,6 +64,9 @@ enum Format {
 }
 
 fn main() {
+    // Skipped-row warnings from import must be visible (spec §5: no silent
+    // degradation), so default to `warn` even without RUST_LOG.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     if let Err(err) = run() {
         eprintln!("error: {err:#}");
         std::process::exit(1);
