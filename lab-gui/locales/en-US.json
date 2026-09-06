@@ -38,6 +38,7 @@
     "edit_draw_target": "Draw Target",
     "edit_draw_target_object": "Object",
     "edit_draw_target_roi": "ROI",
+    "edit_lock_roi": "Lock ROI",
     "edit_default_category": "Default Category",
     "view": "View",
     "view_fit": "Fit to Canvas",
@@ -50,6 +51,7 @@
     "navigate_next": "Next Image",
     "navigate_forward": "Forward 10 Images",
     "navigate_backward": "Backward 10 Images",
+    "navigate_delete_sample": "Delete Sample...",
     "help": "Help",
     "help_shortcuts": "Keyboard Shortcuts...",
     "help_help": "Help",
@@ -113,9 +115,9 @@
   "hint": {
     "shortcut": "Shortcut",
     "menu_file": "File menu: open/save/auto-save/import/export/close projects",
-    "menu_edit": "Edit menu: modes/copy/paste/delete/shape/draw target",
+    "menu_edit": "Edit menu: modes/copy/paste/delete/shape/draw target/lock ROI",
     "menu_view": "View menu: zoom/fit/panels",
-    "menu_navigate": "Navigate menu: move between images",
+    "menu_navigate": "Navigate menu: move between images/delete samples",
     "menu_help": "Help and settings",
     "menu_language": "Change UI language",
     "menu_edit_shape": "Shape tools menu",
@@ -146,6 +148,7 @@
     "edit_shape_rect": "Convert selected shape to rectangle",
     "edit_shape_fix": "Fix self-intersections of selected shape",
     "edit_deselect": "Clear current selection",
+    "edit_lock_roi": "Lock current ROIs (selected one preferred, otherwise all); replace the ROIs of every image you switch to",
     "edit_mode_browse": "Browse mode: read-only selection and navigation",
     "edit_mode_drawing": "Drawing mode: create new objects/ROIs",
     "edit_mode_editing": "Editing mode: move shapes and edit vertices",
@@ -160,6 +163,7 @@
     "navigate_next": "Go to next image",
     "navigate_backward": "Jump backward 10 images",
     "navigate_forward": "Jump forward 10 images",
+    "navigate_delete_sample": "Permanently delete the current image and its annotation file",
     "help_shortcuts": "Open shortcut settings",
     "language_en": "Switch language to English",
     "language_zh": "Switch language to Chinese",
@@ -177,6 +181,7 @@
     "import_failed": "Import failed",
     "export_failed": "Export failed",
     "import_duplicate_image": "Import failed: duplicate image file name {name}",
+    "delete_sample": "Failed to delete sample",
     "no_image": "No image loaded"
   },
   "help": {
@@ -323,5 +328,12 @@
     "version": "Version",
     "website": "Website",
     "close": "Close"
+  },
+  "dialog": {
+    "delete_sample_title": "Delete Sample",
+    "delete_sample_file": "Image",
+    "delete_sample_warning": "This permanently deletes the image file and its annotation file. This cannot be undone.",
+    "delete_sample_confirm": "Delete",
+    "delete_sample_cancel": "Cancel"
   }
 }

@@ -13,20 +13,17 @@ impl LabApp {
             ui.horizontal(|ui| {
                 let mut first = true;
 
-                if let Some(project) = &self.state.project {
-                    if let Ok(progress) = project.get_progress() {
-                        Self::status_add_label(
-                            ui,
-                            &mut first,
-                            format!(
-                                "{} {}/{} ({:.1}%)",
-                                self.state.i18n.t("sidebar.progress"),
-                                progress.annotated,
-                                progress.total,
-                                progress.percentage()
-                            ),
-                        );
-                    }
+                if !self.state.images.is_empty() {
+                    Self::status_add_label(
+                        ui,
+                        &mut first,
+                        format!(
+                            "{} {}/{}",
+                            self.state.i18n.t("sidebar.progress"),
+                            self.state.current_image_index + 1,
+                            self.state.images.len()
+                        ),
+                    );
                 }
 
                 if let Some(image) = &self.state.current_image {

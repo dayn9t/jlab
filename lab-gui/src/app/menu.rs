@@ -487,6 +487,33 @@ impl LabApp {
                         }
                     });
                     Self::update_status_hint(status_hint, &target_response.response, target_hint);
+
+                    ui.separator();
+
+                    // Lock ROI toggle: apply the locked ROIs to every image on switch
+                    let locked = self.state.locked_rois.is_some();
+                    let has_rois = self
+                        .state
+                        .current_annotation
+                        .as_ref()
+                        .map(|l| !l.rois.is_empty())
+                        .unwrap_or(false);
+                    let lock_label = self.state.i18n.t("menu.edit_lock_roi");
+                    let lock_hint = self.state.i18n.t("hint.edit_lock_roi");
+                    let mut checked = locked;
+                    let lock_response = ui.add_enabled(
+                        locked || has_rois,
+                        egui::Checkbox::new(&mut checked, lock_label.clone()),
+                    );
+                    Self::update_status_hint(status_hint, &lock_response, lock_hint);
+                    if lock_response.clicked() {
+                        if checked {
+                            self.state.lock_rois();
+                        } else {
+                            self.state.unlock_rois();
+                        }
+                        ui.close_menu();
+                    }
                 });
                 Self::update_status_hint(status_hint, &edit_menu_response.response, edit_menu_hint);
 
@@ -645,6 +672,20 @@ impl LabApp {
                         }
                         let _ = self.state.jump_forward(10);
                         self.canvas.reset_view();
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    // Delete current sample (image + annotation), with confirmation
+                    let can_delete = !self.state.images.is_empty();
+                    let delete_label = self.state.i18n.t("menu.navigate_delete_sample");
+                    let delete_hint = self.state.i18n.t("hint.navigate_delete_sample");
+                    let delete_response =
+                        ui.add_enabled(can_delete, egui::Button::new(delete_label.clone()));
+                    Self::update_status_hint(status_hint, &delete_response, delete_hint);
+                    if delete_response.clicked() {
+                        self.state.show_delete_confirm = true;
                         ui.close_menu();
                     }
                 });

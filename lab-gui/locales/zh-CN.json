@@ -38,6 +38,7 @@
     "edit_draw_target": "绘制目标",
     "edit_draw_target_object": "目标",
     "edit_draw_target_roi": "ROI",
+    "edit_lock_roi": "锁定ROI",
     "edit_default_category": "默认类别",
     "view": "视图",
     "view_fit": "适应画布",
@@ -50,6 +51,7 @@
     "navigate_next": "下一张图像",
     "navigate_forward": "前进 10 张",
     "navigate_backward": "后退 10 张",
+    "navigate_delete_sample": "删除样本...",
     "help": "帮助",
     "help_shortcuts": "快捷键设置...",
     "help_help": "帮助",
@@ -113,9 +115,9 @@
   "hint": {
     "shortcut": "快捷键",
     "menu_file": "文件菜单：打开/保存/自动保存/导入/导出/关闭项目",
-    "menu_edit": "编辑菜单：模式/复制/粘贴/删除/形状/绘制目标",
+    "menu_edit": "编辑菜单：模式/复制/粘贴/删除/形状/绘制目标/锁定ROI",
     "menu_view": "视图菜单：缩放/适配/面板显示",
-    "menu_navigate": "导航菜单：切换图像",
+    "menu_navigate": "导航菜单：切换图像/删除样本",
     "menu_help": "帮助与设置",
     "menu_language": "切换界面语言",
     "menu_edit_shape": "形状工具菜单",
@@ -146,6 +148,7 @@
     "edit_shape_rect": "将选中目标转换为矩形",
     "edit_shape_fix": "修复选中目标的自交边",
     "edit_deselect": "取消当前选择",
+    "edit_lock_roi": "锁定当前 ROI（选中优先，否则全部），切换图像时自动替换目标图像的 ROI",
     "edit_mode_browse": "浏览模式：只读选择与导航",
     "edit_mode_drawing": "绘制模式：新增目标/ROI",
     "edit_mode_editing": "编辑模式：移动与编辑顶点",
@@ -160,6 +163,7 @@
     "navigate_next": "下一张图像",
     "navigate_backward": "向前跳转10张",
     "navigate_forward": "向后跳转10张",
+    "navigate_delete_sample": "永久删除当前图像及其标注文件",
     "help_shortcuts": "打开快捷键设置窗口",
     "language_en": "切换语言为 English",
     "language_zh": "切换语言为 中文",
@@ -177,6 +181,7 @@
     "import_failed": "导入失败",
     "export_failed": "导出失败",
     "import_duplicate_image": "导入失败：图片文件名重复 {name}",
+    "delete_sample": "删除样本失败",
     "no_image": "未加载图像"
   },
   "help": {
@@ -323,5 +328,12 @@
     "version": "版本",
     "website": "项目主页",
     "close": "退出"
+  },
+  "dialog": {
+    "delete_sample_title": "删除样本",
+    "delete_sample_file": "图像",
+    "delete_sample_warning": "将永久删除该图像文件及其标注文件，不可恢复",
+    "delete_sample_confirm": "删除",
+    "delete_sample_cancel": "取消"
   }
 }

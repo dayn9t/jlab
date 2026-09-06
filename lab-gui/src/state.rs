@@ -2,8 +2,13 @@ use crate::shortcuts::ShortcutManager;
 use lab_core::{Label, LabelMeta, Object, Point, Polygon};
 use lab_utils::Project;
 use serde::{Deserialize, Serialize};
-use serde_json;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+// Config persistence (recent projects, language, auto-save, theme, UI
+// settings) lives in its own module; declared here because `main.rs` maps
+// modules at `src/` level and this keeps the module tree unchanged.
+#[path = "state_persistence.rs"]
+mod state_persistence;
 
 /// Theme color preference
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +117,9 @@ pub struct AppState {
     /// Clipboard ROIs for copy/paste operations
     pub clipboard_rois: Vec<Polygon<f32>>,
 
+    /// Locked ROIs applied to every image on switch (None = not locked)
+    pub locked_rois: Option<Vec<Polygon<f32>>>,
+
     /// Editing state
     pub editing_state: EditingState,
 
@@ -133,6 +141,9 @@ pub struct AppState {
     // Dialog states (新增)
     pub show_options_dialog: bool,
     pub show_about_dialog: bool,
+
+    /// Show the delete-sample confirmation dialog
+    pub show_delete_confirm: bool,
 
     /// Global auto-save setting
     pub auto_save_enabled: bool,
@@ -196,6 +207,7 @@ impl AppState {
             pending_draw_clicks: Vec::new(),
             clipboard_objects: Vec::new(),
             clipboard_rois: Vec::new(),
+            locked_rois: None,
             editing_state: EditingState::new(),
             recent_projects: Vec::new(),
             language,
@@ -207,6 +219,7 @@ impl AppState {
             show_shortcut_settings: false,
             show_options_dialog: false,
             show_about_dialog: false,
+            show_delete_confirm: false,
             auto_save_enabled,
             theme_color,
             show_left_panel: true,
@@ -222,8 +235,30 @@ impl AppState {
 
     /// Load a project
     pub fn load_project(&mut self, path: PathBuf) -> anyhow::Result<()> {
+        // Validate before touching any state: a failed open must leave the
+        // current session (project, locked ROIs, clipboard) exactly as it was.
         let mut project = Project::open(&path)?;
         let images = project.list_images()?;
+
+        // Same save-on-exit contract as close_project: keep pending edits of
+        // the project being left behind.
+        self.save_if_needed()?;
+
+        // Reset per-project state so nothing leaks from the previous project:
+        // locked ROIs would be applied — and auto-saved — into the new
+        // project's images, and a stale current_image/current_annotation
+        // could save project A's annotation inside project B. Cleared
+        // unconditionally (not only via load_current_image) so a new project
+        // with an empty images/ dir cannot keep the previous sample alive.
+        self.locked_rois = None;
+        self.clipboard_objects.clear();
+        self.clipboard_rois.clear();
+        self.current_image = None;
+        self.current_annotation = None;
+        self.selected_object_id = None;
+        self.editing_state.selected_vertex = None;
+        self.has_unsaved_changes = false;
+        self.clear_drawing_state();
 
         // Apply global auto-save setting to project
         project.meta.shape.auto_save = self.auto_save_enabled;
@@ -277,6 +312,7 @@ impl AppState {
         self.clear_drawing_state();
         self.clipboard_objects.clear();
         self.clipboard_rois.clear();
+        self.locked_rois = None;
         self.editing_state = EditingState::new();
 
         log::info!("Project closed");
@@ -318,7 +354,18 @@ impl AppState {
 
         self.has_unsaved_changes = false;
         self.selected_object_id = None;
+        // A stale selected vertex would let arrow keys mutate the next image.
+        self.editing_state.selected_vertex = None;
         self.clear_drawing_state();
+
+        // Apply locked ROIs: replace this image's ROIs (objects are kept)
+        if let Some(locked) = &self.locked_rois {
+            if let Some(label) = &mut self.current_annotation {
+                if apply_locked_rois(label, locked) {
+                    self.has_unsaved_changes = true;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -483,6 +530,100 @@ impl AppState {
         }
     }
 
+    /// Lock current image's ROIs (selected ROI preferred, otherwise all).
+    /// While locked, every image switch replaces the target image's ROIs.
+    pub fn lock_rois(&mut self) {
+        let rois = match &self.current_annotation {
+            Some(label) => rois_to_lock(label, self.selected_object_id),
+            None => Vec::new(),
+        };
+        if rois.is_empty() {
+            log::warn!("Lock ROI: current image has no ROIs to lock");
+            self.locked_rois = None;
+            return;
+        }
+        log::info!("Locked {} ROI(s)", rois.len());
+        self.locked_rois = Some(rois);
+    }
+
+    /// Unlock ROIs and stop applying them on image switch
+    pub fn unlock_rois(&mut self) {
+        if self.locked_rois.take().is_some() {
+            log::info!("Unlocked ROIs");
+        }
+    }
+
+    /// Drop `path` from the cached image list so state never points at a file
+    /// already deleted on disk; clamps the index and clears the loaded image.
+    /// Used when a sample was deleted but the list refresh failed.
+    fn forget_image(&mut self, path: &Path) {
+        self.images.retain(|p| p != path);
+        if self.current_image_index >= self.images.len() {
+            self.current_image_index = self.images.len().saturating_sub(1);
+        }
+        if self.current_image.as_ref().is_some_and(|img| img.path == path) {
+            self.current_image = None;
+            self.current_annotation = None;
+            self.selected_object_id = None;
+            self.editing_state.selected_vertex = None;
+            self.has_unsaved_changes = false;
+        }
+    }
+
+    /// Delete the current sample: image file + annotation file, then load
+    /// the image that now sits at the same index (or clear state if none left).
+    ///
+    /// `Err` means the delete itself failed. Failures after a successful
+    /// delete (list refresh, loading the successor) are logged loudly and
+    /// leave clean state instead: reporting them as a failed delete would be
+    /// false — the destructive operation already happened.
+    pub fn delete_current_sample(&mut self) -> anyhow::Result<()> {
+        let Some(image_path) = self.images.get(self.current_image_index).cloned() else {
+            return Ok(());
+        };
+        let Some(project) = self.project.as_ref() else {
+            return Ok(());
+        };
+
+        project.delete_sample(&image_path)?;
+        let images = match project.list_images() {
+            Ok(images) => images,
+            Err(e) => {
+                log::error!(
+                    "Deleted {:?} but refreshing the image list failed: {:#}",
+                    image_path,
+                    anyhow::Error::from(e)
+                );
+                // The sample is gone from disk; don't leave state pointing
+                // at the deleted file — drop it so a later refresh can recover.
+                self.forget_image(&image_path);
+                return Ok(());
+            }
+        };
+        self.images = images;
+        if self.current_image_index >= self.images.len() {
+            self.current_image_index = self.images.len().saturating_sub(1);
+        }
+        // Drop loaded state pointing at the deleted file BEFORE loading the
+        // successor: if that load fails, current_image/current_annotation
+        // must not keep referencing the deleted sample — save_if_needed on
+        // the next navigation would resurrect labels/<deleted-stem>.yaml.
+        self.forget_image(&image_path);
+
+        if self.images.is_empty() {
+            self.current_image = None;
+            self.current_annotation = None;
+            self.has_unsaved_changes = false;
+            self.selected_object_id = None;
+            self.editing_state.selected_vertex = None;
+            self.clear_drawing_state();
+        } else if let Err(e) = self.load_current_image() {
+            log::error!("Deleted {:?} but loading the next image failed: {:#}", image_path, e);
+        }
+        log::info!("Deleted sample {:?}", image_path);
+        Ok(())
+    }
+
     /// Delete selected object
     pub fn delete_selected(&mut self) {
         if let (Some(label), Some(selected_id)) =
@@ -510,207 +651,6 @@ impl AppState {
     pub fn get_meta(&self) -> Option<&LabelMeta> {
         self.project.as_ref().map(|p| &p.meta)
     }
-
-    /// Add project to recent projects list
-    pub fn add_recent_project(&mut self, path: PathBuf) {
-        // Remove if already exists
-        self.recent_projects.retain(|p| p != &path);
-        // Add to front
-        self.recent_projects.insert(0, path);
-        // Limit to 10
-        self.recent_projects.truncate(10);
-        // Save to file
-        let _ = self.save_recent_projects();
-    }
-
-    /// Load recent projects from config file
-    pub fn load_recent_projects(&mut self) -> anyhow::Result<()> {
-        let config_path = self.get_recent_projects_path()?;
-        if !config_path.exists() {
-            return Ok(());
-        }
-
-        let content = std::fs::read_to_string(&config_path)?;
-        self.recent_projects = serde_json::from_str(&content)?;
-        Ok(())
-    }
-
-    /// Save recent projects to config file
-    pub fn save_recent_projects(&self) -> anyhow::Result<()> {
-        let config_path = self.get_recent_projects_path()?;
-
-        // Create parent directory if it doesn't exist
-        if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-
-        let content = serde_json::to_string_pretty(&self.recent_projects)?;
-        std::fs::write(&config_path, content)?;
-        Ok(())
-    }
-
-    /// Get path to recent projects config file
-    fn get_recent_projects_path(&self) -> anyhow::Result<PathBuf> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .map_err(|_| anyhow::anyhow!("Cannot find home directory"))?;
-
-        let config_dir = PathBuf::from(home).join(".config").join("jlab");
-        Ok(config_dir.join("recent_projects.json"))
-    }
-
-    /// Set language
-    pub fn set_language(&mut self, language: crate::i18n::Language) -> anyhow::Result<()> {
-        self.i18n.set_language(language)?;
-        self.language = language;
-        let _ = self.save_language_setting();
-        Ok(())
-    }
-
-    /// Load language setting from config file
-    fn load_language_setting() -> Option<crate::i18n::Language> {
-        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok()?;
-        let config_path = PathBuf::from(home).join(".config").join("jlab").join("language.json");
-
-        if !config_path.exists() {
-            return None;
-        }
-
-        let content = std::fs::read_to_string(&config_path).ok()?;
-        serde_json::from_str(&content).ok()
-    }
-
-    /// Save language setting to config file
-    fn save_language_setting(&self) -> anyhow::Result<()> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .map_err(|_| anyhow::anyhow!("Cannot find home directory"))?;
-
-        let config_dir = PathBuf::from(home).join(".config").join("jlab");
-        std::fs::create_dir_all(&config_dir)?;
-
-        let config_path = config_dir.join("language.json");
-        let content = serde_json::to_string_pretty(&self.language)?;
-        std::fs::write(&config_path, content)?;
-        Ok(())
-    }
-
-    /// Load auto-save setting from config file
-    fn load_auto_save_setting() -> Option<bool> {
-        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok()?;
-        let config_path = PathBuf::from(home).join(".config").join("jlab").join("auto_save.json");
-
-        if !config_path.exists() {
-            return None;
-        }
-
-        let content = std::fs::read_to_string(&config_path).ok()?;
-        serde_json::from_str(&content).ok()
-    }
-
-    /// Save auto-save setting to config file
-    pub fn save_auto_save_setting(&self) -> anyhow::Result<()> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .map_err(|_| anyhow::anyhow!("Cannot find home directory"))?;
-
-        let config_dir = PathBuf::from(home).join(".config").join("jlab");
-        std::fs::create_dir_all(&config_dir)?;
-
-        let config_path = config_dir.join("auto_save.json");
-        let content = serde_json::to_string_pretty(&self.auto_save_enabled)?;
-        std::fs::write(&config_path, content)?;
-        Ok(())
-    }
-
-    /// Load theme setting from config file
-    fn load_theme_setting() -> Option<ThemeColor> {
-        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok()?;
-        let config_path = PathBuf::from(home).join(".config").join("jlab").join("theme.json");
-
-        if !config_path.exists() {
-            return None;
-        }
-
-        let content = std::fs::read_to_string(&config_path).ok()?;
-        let theme_str: String = serde_json::from_str(&content).ok()?;
-        ThemeColor::from_str(&theme_str)
-    }
-
-    /// Save theme setting to config file
-    pub fn save_theme_setting(&self) -> anyhow::Result<()> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .map_err(|_| anyhow::anyhow!("Cannot find home directory"))?;
-
-        let config_dir = PathBuf::from(home).join(".config").join("jlab");
-        std::fs::create_dir_all(&config_dir)?;
-
-        let config_path = config_dir.join("theme.json");
-        let content = serde_json::to_string_pretty(&self.theme_color.as_str())?;
-        std::fs::write(&config_path, content)?;
-        Ok(())
-    }
-
-    /// Load UI settings from config file
-    fn load_ui_settings() -> (Option<f32>, Option<f32>, Option<bool>) {
-        let home = match std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-            Ok(h) => h,
-            Err(_) => return (None, None, None),
-        };
-        let config_path = PathBuf::from(home).join(".config").join("jlab").join("ui_settings.json");
-
-        if !config_path.exists() {
-            return (None, None, None);
-        }
-
-        let content = match std::fs::read_to_string(&config_path) {
-            Ok(c) => c,
-            Err(_) => return (None, None, None),
-        };
-
-        #[derive(Deserialize)]
-        struct UISettings {
-            font_size: Option<f32>,
-            ui_scale: Option<f32>,
-            show_scrollbar: Option<bool>,
-        }
-
-        let settings: UISettings = match serde_json::from_str(&content) {
-            Ok(s) => s,
-            Err(_) => return (None, None, None),
-        };
-
-        (settings.font_size, settings.ui_scale, settings.show_scrollbar)
-    }
-
-    /// Save UI settings to config file
-    pub fn save_ui_settings(&self) -> anyhow::Result<()> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .map_err(|_| anyhow::anyhow!("Cannot find home directory"))?;
-
-        let config_dir = PathBuf::from(home).join(".config").join("jlab");
-        std::fs::create_dir_all(&config_dir)?;
-
-        #[derive(Serialize)]
-        struct UISettings {
-            font_size: f32,
-            ui_scale: f32,
-            show_scrollbar: bool,
-        }
-
-        let settings = UISettings {
-            font_size: self.font_size,
-            ui_scale: self.ui_scale,
-            show_scrollbar: self.show_scrollbar,
-        };
-
-        let config_path = config_dir.join("ui_settings.json");
-        let content = serde_json::to_string_pretty(&settings)?;
-        std::fs::write(&config_path, content)?;
-        Ok(())
-    }
 }
 
 /// Image data
@@ -737,5 +677,118 @@ pub fn roi_index_from_id(id: i32) -> Option<usize> {
         Some((-id - 1) as usize)
     } else {
         None
+    }
+}
+
+/// Pick the ROIs to lock from a label: the selected ROI if one is selected,
+/// otherwise all ROIs. (A selected object falls back to all ROIs — locking is
+/// about ROIs, not objects.)
+pub(crate) fn rois_to_lock(label: &Label, selected_id: Option<i32>) -> Vec<Polygon<f32>> {
+    if let Some(id) = selected_id {
+        if let Some(index) = roi_index_from_id(id) {
+            if let Some(roi) = label.rois.get(index) {
+                return vec![roi.clone()];
+            }
+        }
+    }
+    label.rois.clone()
+}
+
+/// Replace a label's ROIs with the locked ROIs. Returns whether anything changed.
+pub(crate) fn apply_locked_rois(label: &mut Label, locked: &[Polygon<f32>]) -> bool {
+    if label.rois.as_slice() == locked {
+        return false;
+    }
+    label.rois = locked.to_vec();
+    lab_core::touch(label);
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn poly(x: f32) -> Polygon<f32> {
+        Polygon::from(vec![Point { x, y: 0.1 }, Point { x: x + 0.1, y: 0.2 }, Point { x, y: 0.3 }])
+    }
+
+    fn label_with_rois(n: usize) -> Label {
+        let mut label = lab_core::new_label("test");
+        for i in 0..n {
+            label.rois.push(poly(0.1 * i as f32));
+        }
+        label
+    }
+
+    #[test]
+    fn rois_to_lock_selected_roi_returns_only_that_roi() {
+        let label = label_with_rois(3);
+        // ROI ids are negative: -(index) - 1
+        let selected = roi_id_from_index(1);
+        let locked = rois_to_lock(&label, Some(selected));
+        assert_eq!(locked, vec![label.rois[1].clone()]);
+    }
+
+    #[test]
+    fn rois_to_lock_no_selection_returns_all_rois() {
+        let label = label_with_rois(3);
+        let locked = rois_to_lock(&label, None);
+        assert_eq!(locked, label.rois);
+    }
+
+    #[test]
+    fn rois_to_lock_selected_object_falls_back_to_all_rois() {
+        let label = label_with_rois(2);
+        // Object ids are non-negative, roi_index_from_id returns None
+        let locked = rois_to_lock(&label, Some(5));
+        assert_eq!(locked, label.rois);
+    }
+
+    #[test]
+    fn apply_locked_rois_replaces_and_reports_change() {
+        let mut label = label_with_rois(1);
+        let old_modified = label.last_modified;
+
+        let locked = vec![poly(0.9)];
+        assert!(apply_locked_rois(&mut label, &locked));
+        assert_eq!(label.rois, locked);
+        assert!(label.last_modified >= old_modified);
+    }
+
+    #[test]
+    fn apply_locked_rois_identical_is_noop() {
+        let mut label = label_with_rois(2);
+        let locked = label.rois.clone();
+
+        assert!(!apply_locked_rois(&mut label, &locked));
+        assert_eq!(label.rois, locked);
+    }
+
+    #[test]
+    fn apply_locked_rois_empty_clears_existing() {
+        let mut label = label_with_rois(2);
+        assert!(apply_locked_rois(&mut label, &[]));
+        assert!(label.rois.is_empty());
+    }
+
+    #[test]
+    fn forget_image_drops_path_clamps_index_and_clears_current() {
+        let mut state = AppState::new();
+        state.images = vec![PathBuf::from("/t/a.png"), PathBuf::from("/t/b.png")];
+        state.current_image_index = 1;
+        state.current_image = Some(ImageData {
+            path: PathBuf::from("/t/b.png"),
+            width: 1,
+            height: 1,
+            pixels: vec![],
+        });
+        state.current_annotation = Some(lab_core::new_label("test"));
+
+        state.forget_image(&PathBuf::from("/t/b.png"));
+
+        assert_eq!(state.images, vec![PathBuf::from("/t/a.png")]);
+        assert_eq!(state.current_image_index, 0);
+        assert!(state.current_image.is_none());
+        assert!(state.current_annotation.is_none());
     }
 }
