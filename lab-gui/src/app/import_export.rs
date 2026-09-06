@@ -1,9 +1,10 @@
 use super::LabApp;
 use anyhow::Context;
-use lab_core::Label;
-use lab_utils::conversion::{export_annotation, export_coco_batch, ExportFormat};
+use lab_utils::conversion::{
+    collect_export_items, ensure_safe_export_dir, export_dataset_coco, export_dataset_labelme,
+    export_dataset_voc, export_dataset_yolo,
+};
 use std::collections::HashSet;
-use std::fs;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum DatasetFormat {
@@ -105,7 +106,6 @@ impl LabApp {
 
     fn try_export_dataset(&mut self, format: DatasetFormat) -> anyhow::Result<()> {
         let project = self.state.project.as_ref().context(self.state.i18n.t("error.no_project"))?;
-        let meta = project.meta.clone();
 
         let Some(output_root) =
             rfd::FileDialog::new().set_title("Select export folder").pick_folder()
@@ -113,72 +113,23 @@ impl LabApp {
             return Ok(());
         };
 
-        let export_items = lab_utils::conversion::collect_export_items(project)?;
+        // Fail fast before reading any image when the output dir would
+        // overwrite the project itself (the drivers re-check before writing).
+        ensure_safe_export_dir(&project.root, &output_root)?;
+
+        let meta = project.meta.clone();
+        let export_items = collect_export_items(project)?;
 
         match format {
             DatasetFormat::Yolo => {
-                let images_dir = output_root.join("images");
-                let labels_dir = output_root.join("labels");
-                fs::create_dir_all(&images_dir)?;
-                fs::create_dir_all(&labels_dir)?;
-
-                for item in &export_items {
-                    let label_path = labels_dir.join(format!("{}.txt", item.stem));
-                    export_annotation(
-                        &label_path,
-                        &item.annotation,
-                        &meta,
-                        item.image_path.to_string_lossy().as_ref(),
-                        item.width,
-                        item.height,
-                        ExportFormat::Yolo,
-                    )?;
-                    fs::copy(&item.image_path, images_dir.join(&item.file_name))?;
-                }
+                export_dataset_yolo(project, &export_items, &meta, &output_root)?
             }
-            DatasetFormat::Voc => {
-                let images_dir = output_root.join("JPEGImages");
-                let annotations_dir = output_root.join("Annotations");
-                fs::create_dir_all(&images_dir)?;
-                fs::create_dir_all(&annotations_dir)?;
-
-                for item in &export_items {
-                    let label_path = annotations_dir.join(format!("{}.xml", item.stem));
-                    export_annotation(
-                        &label_path,
-                        &item.annotation,
-                        &meta,
-                        item.image_path.to_string_lossy().as_ref(),
-                        item.width,
-                        item.height,
-                        ExportFormat::Voc,
-                    )?;
-                    fs::copy(&item.image_path, images_dir.join(&item.file_name))?;
-                }
-            }
+            DatasetFormat::Voc => export_dataset_voc(project, &export_items, &meta, &output_root)?,
             DatasetFormat::Coco => {
-                let images_dir = output_root.join("images");
-                fs::create_dir_all(&images_dir)?;
-                for item in &export_items {
-                    fs::copy(&item.image_path, images_dir.join(&item.file_name))?;
-                }
-
-                let coco_path = output_root.join("annotations.json");
-                let coco_items: Vec<(String, Label, u32, u32)> = export_items
-                    .iter()
-                    .map(|item| {
-                        (item.file_name.clone(), item.annotation.clone(), item.width, item.height)
-                    })
-                    .collect();
-                export_coco_batch(&coco_path, &coco_items, &meta)?;
+                export_dataset_coco(project, &export_items, &meta, &output_root)?
             }
             DatasetFormat::LabelMe => {
-                fs::create_dir_all(&output_root)?;
-                for item in &export_items {
-                    fs::copy(&item.image_path, output_root.join(&item.file_name))?;
-                    let label_path = output_root.join(format!("{}.json", item.stem));
-                    lab_utils::conversion::export_labelme_annotation(&label_path, item, &meta)?;
-                }
+                export_dataset_labelme(project, &export_items, &meta, &output_root)?
             }
         }
 

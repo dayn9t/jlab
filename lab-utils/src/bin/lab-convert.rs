@@ -7,10 +7,9 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use lab_core::LabelMeta;
 use lab_utils::conversion::{
-    collect_export_items, export_annotation, export_coco_batch, export_labelme_annotation,
-    ExportFormat, ExportItem,
+    collect_export_items, ensure_safe_export_dir, export_dataset_coco, export_dataset_labelme,
+    export_dataset_voc, export_dataset_yolo,
 };
 use lab_utils::import::{
     import_from_coco, import_from_labelme, import_from_voc, import_from_yolo,
@@ -18,8 +17,7 @@ use lab_utils::import::{
 };
 use lab_utils::Project;
 use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "lab-convert", version, about = "JLab annotation format converter")]
@@ -119,80 +117,20 @@ fn run_import(
 fn run_export(format: Format, project_dir: PathBuf, out_dir: PathBuf) -> Result<()> {
     let project =
         Project::open(&project_dir).context("failed to open project (meta.yaml required)")?;
+    // Fail fast before reading any image when the output dir would overwrite
+    // the project itself (the per-format drivers re-check before writing).
+    ensure_safe_export_dir(&project.root, &out_dir)?;
     let meta = project.meta.clone();
     let items = collect_export_items(&project)?;
     let total_boxes = items.iter().map(|item| item.annotation.objects.len()).sum::<usize>();
 
     match format {
-        Format::Yolo => export_yolo(&items, &meta, &out_dir)?,
-        Format::Voc => export_voc(&items, &meta, &out_dir)?,
-        Format::Coco => export_coco(&items, &meta, &out_dir)?,
-        Format::LabelMe => export_labelme(&items, &meta, &out_dir)?,
+        Format::Yolo => export_dataset_yolo(&project, &items, &meta, &out_dir)?,
+        Format::Voc => export_dataset_voc(&project, &items, &meta, &out_dir)?,
+        Format::Coco => export_dataset_coco(&project, &items, &meta, &out_dir)?,
+        Format::LabelMe => export_dataset_labelme(&project, &items, &meta, &out_dir)?,
     }
 
     println!("exported {} labels, {total_boxes} boxes -> {}", items.len(), out_dir.display());
-    Ok(())
-}
-
-fn export_yolo(items: &[ExportItem], meta: &LabelMeta, out_dir: &Path) -> Result<()> {
-    let images_dir = out_dir.join("images");
-    let labels_dir = out_dir.join("labels");
-    fs::create_dir_all(&images_dir)?;
-    fs::create_dir_all(&labels_dir)?;
-    for item in items {
-        export_annotation(
-            labels_dir.join(format!("{}.txt", item.stem)),
-            &item.annotation,
-            meta,
-            &item.image_path.to_string_lossy(),
-            item.width,
-            item.height,
-            ExportFormat::Yolo,
-        )?;
-        fs::copy(&item.image_path, images_dir.join(&item.file_name))?;
-    }
-    Ok(())
-}
-
-fn export_voc(items: &[ExportItem], meta: &LabelMeta, out_dir: &Path) -> Result<()> {
-    let images_dir = out_dir.join("JPEGImages");
-    let annotations_dir = out_dir.join("Annotations");
-    fs::create_dir_all(&images_dir)?;
-    fs::create_dir_all(&annotations_dir)?;
-    for item in items {
-        export_annotation(
-            annotations_dir.join(format!("{}.xml", item.stem)),
-            &item.annotation,
-            meta,
-            &item.image_path.to_string_lossy(),
-            item.width,
-            item.height,
-            ExportFormat::Voc,
-        )?;
-        fs::copy(&item.image_path, images_dir.join(&item.file_name))?;
-    }
-    Ok(())
-}
-
-fn export_coco(items: &[ExportItem], meta: &LabelMeta, out_dir: &Path) -> Result<()> {
-    let images_dir = out_dir.join("images");
-    fs::create_dir_all(&images_dir)?;
-    for item in items {
-        fs::copy(&item.image_path, images_dir.join(&item.file_name))?;
-    }
-    let coco_items = items
-        .iter()
-        .map(|item| (item.file_name.clone(), item.annotation.clone(), item.width, item.height))
-        .collect::<Vec<_>>();
-    export_coco_batch(out_dir.join("annotations.json"), &coco_items, meta)?;
-    Ok(())
-}
-
-fn export_labelme(items: &[ExportItem], meta: &LabelMeta, out_dir: &Path) -> Result<()> {
-    fs::create_dir_all(out_dir)?;
-    for item in items {
-        fs::copy(&item.image_path, out_dir.join(&item.file_name))?;
-        export_labelme_annotation(&out_dir.join(format!("{}.json", item.stem)), item, meta)?;
-    }
     Ok(())
 }
