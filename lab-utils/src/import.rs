@@ -85,6 +85,65 @@ pub fn import_from_yolo(root: &Path, meta: &LabelMeta) -> anyhow::Result<Vec<Imp
     Ok(imported)
 }
 
+pub fn import_from_voc(root: &Path, meta: &LabelMeta) -> anyhow::Result<Vec<ImportedImage>> {
+    let images_dir = root.join("JPEGImages");
+    let labels_dir = root.join("Annotations");
+    if !images_dir.exists() || !labels_dir.exists() {
+        return Err(anyhow::anyhow!(
+            "VOC root must contain JPEGImages/ and Annotations/ directories"
+        ));
+    }
+
+    let image_paths = list_images_in_dir(&images_dir)?;
+    let mut imported = Vec::new();
+
+    for image_path in image_paths {
+        let file_name = image_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .context("Invalid image name")?
+            .to_string();
+        let stem = Path::new(&file_name).file_stem().and_then(|s| s.to_str()).unwrap_or(&file_name);
+        let label_path = labels_dir.join(format!("{}.xml", stem));
+
+        let mut objects = Vec::new();
+        if label_path.exists() {
+            let xml = fs::read_to_string(&label_path)?;
+            if let Some((width, height)) = parse_voc_size(&xml) {
+                let voc_objects = parse_voc_objects(&xml);
+                for voc_obj in voc_objects {
+                    let category_id = match find_category_id_by_name(meta, &voc_obj.label) {
+                        Some(id) => id,
+                        None => {
+                            log::warn!(
+                                "Unknown category name {} in {:?}",
+                                voc_obj.label,
+                                label_path
+                            );
+                            continue;
+                        }
+                    };
+
+                    let xmin = voc_obj.xmin / width;
+                    let ymin = voc_obj.ymin / height;
+                    let xmax = voc_obj.xmax / width;
+                    let ymax = voc_obj.ymax / height;
+                    let polygon = rect_polygon(xmin, ymin, xmax, ymax);
+                    if !polygon.is_valid() {
+                        continue;
+                    }
+                    objects.push(lab_core::new_object(0, category_id, polygon));
+                }
+            }
+        }
+
+        let annotation = build_label(objects, "import");
+        imported.push(ImportedImage { source_path: image_path, file_name, annotation });
+    }
+
+    Ok(imported)
+}
+
 pub fn list_images_in_dir(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut images = Vec::new();
     for entry in fs::read_dir(dir)? {
@@ -142,6 +201,71 @@ pub fn build_label(objects: Vec<Object>, user_agent: &str) -> Option<Label> {
 
 fn find_category_id_by_name(meta: &LabelMeta, name: &str) -> Option<i32> {
     meta.categories.iter().find(|cat| cat.name == name).map(|cat| cat.id)
+}
+
+fn parse_voc_size(xml: &str) -> Option<(f32, f32)> {
+    let width = extract_tag_value(xml, "width")?.parse::<f32>().ok()?;
+    let height = extract_tag_value(xml, "height")?.parse::<f32>().ok()?;
+    if width <= 0.0 || height <= 0.0 {
+        None
+    } else {
+        Some((width, height))
+    }
+}
+
+fn parse_voc_objects(xml: &str) -> Vec<VocObject> {
+    let mut objects = Vec::new();
+    let mut rest = xml;
+    while let Some(start) = rest.find("<object>") {
+        rest = &rest[start + "<object>".len()..];
+        let end = match rest.find("</object>") {
+            Some(end) => end,
+            None => break,
+        };
+        let block = &rest[..end];
+        rest = &rest[end + "</object>".len()..];
+
+        let label = match extract_tag_value(block, "name") {
+            Some(val) => val,
+            None => continue,
+        };
+        let xmin = match extract_tag_value(block, "xmin").and_then(|v| v.parse().ok()) {
+            Some(val) => val,
+            None => continue,
+        };
+        let ymin = match extract_tag_value(block, "ymin").and_then(|v| v.parse().ok()) {
+            Some(val) => val,
+            None => continue,
+        };
+        let xmax = match extract_tag_value(block, "xmax").and_then(|v| v.parse().ok()) {
+            Some(val) => val,
+            None => continue,
+        };
+        let ymax = match extract_tag_value(block, "ymax").and_then(|v| v.parse().ok()) {
+            Some(val) => val,
+            None => continue,
+        };
+
+        objects.push(VocObject { label, xmin, ymin, xmax, ymax });
+    }
+    objects
+}
+
+fn extract_tag_value(content: &str, tag: &str) -> Option<String> {
+    let start_tag = format!("<{}>", tag);
+    let end_tag = format!("</{}>", tag);
+    let start = content.find(&start_tag)? + start_tag.len();
+    let end = content[start..].find(&end_tag)? + start;
+    Some(content[start..end].trim().to_string())
+}
+
+#[derive(Debug)]
+struct VocObject {
+    label: String,
+    xmin: f32,
+    ymin: f32,
+    xmax: f32,
+    ymax: f32,
 }
 
 #[cfg(test)]
@@ -219,5 +343,38 @@ mod tests {
         assert_eq!(p.0.len(), 4);
         assert_eq!(p.0[0], Point { x: 0.0, y: 0.2 });
         assert!(rect_polygon(0.5, 0.5, 0.5, 0.8).0.is_empty());
+    }
+
+    #[test]
+    fn import_from_voc_parses_objects_by_name() {
+        let root = temp_root("voc");
+        let voc_root = root.join("voc");
+        fs::create_dir_all(voc_root.join("JPEGImages")).unwrap();
+        fs::create_dir_all(voc_root.join("Annotations")).unwrap();
+        fs::write(voc_root.join("JPEGImages/a.jpg"), b"fake").unwrap();
+        fs::write(
+            voc_root.join("Annotations/a.xml"),
+            r#"<annotation><size><width>100</width><height>200</height></size>
+               <object><name>person</name><xmin>10</xmin><ymin>20</ymin><xmax>30</xmax><ymax>60</ymax></object>
+               <object><name>dog</name><xmin>1</xmin><ymin>1</ymin><xmax>9</xmax><ymax>9</ymax></object>
+               </annotation>"#,
+        )
+        .unwrap();
+
+        let imported = import_from_voc(&voc_root, &test_meta()).unwrap();
+
+        let label = imported[0].annotation.as_ref().unwrap();
+        assert_eq!(label.objects.len(), 1); // "dog" unknown -> skipped
+        assert_eq!(label.objects[0].category, 0);
+        // pixel (10,20)-(30,60) on 100x200 -> normalized (0.1,0.1)-(0.3,0.3)
+        assert_eq!(label.objects[0].polygon.0[0], Point { x: 0.1, y: 0.1 });
+        assert_eq!(label.objects[0].polygon.0[2], Point { x: 0.3, y: 0.3 });
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn import_from_voc_requires_dirs() {
+        let err = import_from_voc(&temp_root("voc-bad"), &test_meta());
+        assert!(err.is_err());
     }
 }
