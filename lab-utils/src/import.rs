@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 pub struct ImportedImage {
     pub source_path: PathBuf,
     pub file_name: String,
-    pub annotation: Option<Label>,
+    pub annotation: Label,
 }
 
 pub fn import_from_yolo(root: &Path, meta: &LabelMeta) -> anyhow::Result<Vec<ImportedImage>> {
@@ -299,10 +299,8 @@ pub fn merge_imported_images(
         let dest_image = project.images_dir().join(&item.file_name);
         fs::copy(&item.source_path, &dest_image)?;
 
-        if let Some(annotation) = item.annotation {
-            let label_path = project.annotation_path(&item.file_name);
-            lab_core::io::save_annotation(&label_path, &annotation)?;
-        }
+        let label_path = project.annotation_path(&item.file_name);
+        lab_core::io::save_annotation(&label_path, &item.annotation)?;
     }
 
     Ok(())
@@ -351,16 +349,13 @@ fn clamp01(value: f32) -> f32 {
     value.max(0.0).min(1.0)
 }
 
-pub fn build_label(objects: Vec<Object>, user_agent: &str) -> Option<Label> {
-    if objects.is_empty() {
-        return None;
-    }
+pub fn build_label(objects: Vec<Object>, user_agent: &str) -> Label {
     let mut label = lab_core::new_label(user_agent);
     for (idx, mut obj) in objects.into_iter().enumerate() {
         obj.id = idx as i32;
         lab_core::add_object(&mut label, obj);
     }
-    Some(label)
+    label
 }
 
 fn find_category_id_by_name(meta: &LabelMeta, name: &str) -> Option<i32> {
@@ -634,7 +629,7 @@ pub(crate) mod tests {
 
         assert_eq!(imported.len(), 1);
         assert_eq!(imported[0].file_name, "a.jpg");
-        let label = imported[0].annotation.as_ref().unwrap();
+        let label = &imported[0].annotation;
         assert_eq!(label.objects.len(), 1); // category 9 unknown -> skipped
         assert_eq!(label.objects[0].category, 0);
         assert_eq!(label.objects[0].polygon.0.len(), 4);
@@ -649,7 +644,7 @@ pub(crate) mod tests {
         let imported = import_from_yolo(&root, &test_meta()).unwrap();
 
         assert_eq!(imported.len(), 1);
-        assert!(imported[0].annotation.is_none());
+        assert!(imported[0].annotation.objects.is_empty());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -679,7 +674,7 @@ pub(crate) mod tests {
 
         let imported = import_from_voc(&voc_root, &test_meta()).unwrap();
 
-        let label = imported[0].annotation.as_ref().unwrap();
+        let label = &imported[0].annotation;
         assert_eq!(label.objects.len(), 1); // "dog" unknown -> skipped
         assert_eq!(label.objects[0].category, 0);
         // pixel (10,20)-(30,60) on 100x200 -> normalized (0.1,0.1)-(0.3,0.3)
@@ -711,7 +706,7 @@ pub(crate) mod tests {
 
         let imported = import_from_coco(&root.join("ann.json"), &root, &test_meta()).unwrap();
 
-        let label = imported[0].annotation.as_ref().unwrap();
+        let label = &imported[0].annotation;
         assert_eq!(label.objects.len(), 2);
         // category 7 named "person" -> mapped to meta id 0
         assert_eq!(label.objects[0].category, 0);
@@ -734,7 +729,7 @@ pub(crate) mod tests {
 
         let imported = import_from_labelme(&root, &test_meta()).unwrap();
 
-        let label = imported[0].annotation.as_ref().unwrap();
+        let label = &imported[0].annotation;
         assert_eq!(label.objects.len(), 1);
         assert_eq!(label.objects[0].category, 0);
         assert_eq!(label.objects[0].polygon.0.len(), 3);
@@ -754,7 +749,7 @@ pub(crate) mod tests {
         ImportedImage {
             source_path: path.to_path_buf(),
             file_name: name.to_string(),
-            annotation: None,
+            annotation: lab_core::new_label("test"),
         }
     }
 
@@ -769,7 +764,7 @@ pub(crate) mod tests {
             vec![ImportedImage {
                 source_path: src.clone(),
                 file_name: "src.jpg".to_string(),
-                annotation: Some(ann),
+                annotation: ann,
             }],
             &project,
             &Default::default(),

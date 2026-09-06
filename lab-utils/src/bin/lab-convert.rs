@@ -108,10 +108,7 @@ fn run_import(
         Format::LabelMe => import_from_labelme(&src, &meta)?,
     };
 
-    let total_boxes = imported
-        .iter()
-        .map(|item| item.annotation.as_ref().map(|l| l.objects.len()).unwrap_or(0))
-        .sum::<usize>();
+    let total_boxes = imported.iter().map(|item| item.annotation.objects.len()).sum::<usize>();
     let count = imported.len();
 
     merge_imported_images(imported, &project, &existing_names, "duplicate image name: {name}")?;
