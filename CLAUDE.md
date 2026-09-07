@@ -1,6 +1,6 @@
-# JLab — 2D 图像标注工具
+# VLabel — 2D 图像标注工具
 
-Rust workspace (3 crates): lab-core（标注数据模型 + 导出）、lab-gui（egui GUI）、lab-utils（工具库）
+Rust workspace (3 crates): vlabel-core（标注数据模型 + 导出）、vlabel-gui（egui GUI）、vlabel-utils（工具库）
 
 ## 术语表
 
@@ -9,14 +9,14 @@ Rust workspace (3 crates): lab-core（标注数据模型 + 导出）、lab-gui�
 | Annotation | 多边形标注数据（点集 + 类别 + 属性），存储为 YAML | ≠ Label（标签文本） |
 | ROI | Region of Interest，感兴趣区域标注 | ≠ 普通目标标注 |
 | Mode | 编辑模式（Normal / Editing），决定画布行为 | ≠ 编辑器模式 |
-| Project | 标注项目 = meta.yaml + images/ + labels/ | ≠ Cargo 项目 |
+| Project | 标注项目 = meta.yaml + images/ + vlabels/ | ≠ Cargo 项目 |
 | Export | 将标注导出为 YOLO / VOC / COCO 格式 | ≠ 序列化 |
 
 ## 构建 & 测试
 
 ```bash
 cargo build --release          # 构建全部
-cargo run --release -p lab-gui # 启动 GUI
+cargo run --release -p vlabel-gui # 启动 GUI
 cargo test --workspace         # 运行全部测试
 cargo clippy --workspace       # lint
 cargo fmt --check              # 格式检查
@@ -31,7 +31,7 @@ cargo fmt --check              # 格式检查
 ## 设计原则
 
 - 不可变数据优先：标注操作创建新状态，不修改原状态
-- workspace 分层：lab-core 无 GUI 依赖，lab-gui 只做展示
+- workspace 分层：vlabel-core 无 GUI 依赖，vlabel-gui 只做展示
 - i18n：所有用户可见文本通过 i18n 模块管理
 
 ## 仓库规范

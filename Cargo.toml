@@ -1,7 +1,7 @@
 [workspace]
 members = [
-    "lab-core", "lab-gui",
-    "lab-utils",
+    "vlabel-core", "vlabel-gui",
+    "vlabel-utils",
 ]
 
 resolver = "2"
@@ -11,7 +11,7 @@ version = "0.7.0"
 edition = "2021"
 authors = ["Will Jiang <dayn9t@gmail.com>"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/dayn9t/jlab"
+repository = "https://github.com/dayn9t/vlabel"
 
 [workspace.dependencies]
 # Common dependencies can be defined here and referenced by workspace members

@@ -1,4 +1,4 @@
-# JLab
+# VLabel
 
 2D 目标检测与属性分类的图像标注工具。
 
@@ -23,17 +23,17 @@ cargo build --release
 
 ```bash
 # 直接启动
-cargo run --release -p lab-gui
+cargo run --release -p vlabel-gui
 
 # 打开项目目录
-cargo run --release -p lab-gui -- /path/to/project
+cargo run --release -p vlabel-gui -- /path/to/project
 ```
 
 ### 格式转换 CLI（非交互）
 
 ```bash
-cargo run --release -p lab-utils --bin lab-convert -- import --format yolo <src_root> <project_dir>
-cargo run --release -p lab-utils --bin lab-convert -- export --format coco <project_dir> <out_dir>
+cargo run --release -p vlabel-utils --bin vlabel-convert -- import --format yolo <src_root> <project_dir>
+cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format coco <project_dir> <out_dir>
 ```
 
 ## 项目结构
@@ -91,7 +91,7 @@ label_root/
 
 ## 配置文件
 
-用户配置保存在 `~/.config/jlab/`：
+用户配置保存在 `~/.config/vlabel/`：
 
 - `ui_settings.json` - 字体、缩放、滚动条等外观设置
 - `theme.json` - 主题设置

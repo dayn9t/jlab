@@ -2187,57 +2187,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
-name = "lab-core"
-version = "0.7.0"
-dependencies = [
- "anyhow",
- "chrono",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror 1.0.69",
- "v3-types",
-]
-
-[[package]]
-name = "lab-gui"
-version = "0.7.0"
-dependencies = [
- "anyhow",
- "clap",
- "dirs",
- "eframe",
- "egui",
- "egui_extras",
- "env_logger",
- "image",
- "lab-core",
- "lab-utils",
- "log",
- "open",
- "rfd",
- "serde",
- "serde_json",
- "serde_yaml",
- "sys-locale",
-]
-
-[[package]]
-name = "lab-utils"
-version = "0.7.0"
-dependencies = [
- "anyhow",
- "clap",
- "env_logger",
- "image",
- "lab-core",
- "log",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "lebe"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4210,6 +4159,57 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vlabel-core"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
+ "v3-types",
+]
+
+[[package]]
+name = "vlabel-gui"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs",
+ "eframe",
+ "egui",
+ "egui_extras",
+ "env_logger",
+ "image",
+ "log",
+ "open",
+ "rfd",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sys-locale",
+ "vlabel-core",
+ "vlabel-utils",
+]
+
+[[package]]
+name = "vlabel-utils"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "env_logger",
+ "image",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "vlabel-core",
+]
 
 [[package]]
 name = "walkdir"
