@@ -4,6 +4,7 @@
 //!   vlabel-convert import --format <yolo|voc|coco|labelme> <src> <project_dir>
 //!       (coco: <src> is the annotation json; `--images <dir>` is required)
 //!   vlabel-convert export --format <yolo|voc|coco|labelme> <project_dir> <out_dir>
+//!   vlabel-convert migrate-yaml [--global] <project_dir>
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -17,6 +18,7 @@ use vlabel_utils::import::{
     import_from_coco, import_from_labelme, import_from_voc, import_from_yolo,
     merge_imported_images, ImportedImage,
 };
+use vlabel_utils::migrate;
 use vlabel_utils::Project;
 
 #[derive(Parser)]
@@ -51,6 +53,14 @@ enum Command {
         /// Output directory
         out: PathBuf,
     },
+    /// Migrate a legacy YAML project (meta.yaml + vlabels/*.yaml + shortcuts.yaml) to JSON5
+    MigrateYaml {
+        /// VLabel project directory
+        project: PathBuf,
+        /// Also migrate the global shortcuts config (~/.config/vlabel/shortcuts.yaml)
+        #[arg(long)]
+        global: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone, Copy)]
@@ -78,6 +88,23 @@ fn run() -> Result<()> {
             run_import(format, src, images, project)
         }
         Command::Export { format, project, out } => run_export(format, project, out),
+        Command::MigrateYaml { project, global } => {
+            let global_path = if global {
+                Some(
+                    migrate::global_shortcuts_yaml_path()
+                        .context("could not resolve global config directory")?,
+                )
+            } else {
+                None
+            };
+            let report = migrate::migrate_project(&project, global_path.as_deref())
+                .with_context(|| format!("migration failed in {}", project.display()))?;
+            println!(
+                "migrated: meta={}, labels={}, shortcuts={}",
+                report.meta, report.labels, report.shortcuts
+            );
+            Ok(())
+        }
     }
 }
 
