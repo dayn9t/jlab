@@ -607,7 +607,7 @@ impl AppState {
         // Drop loaded state pointing at the deleted file BEFORE loading the
         // successor: if that load fails, current_image/current_annotation
         // must not keep referencing the deleted sample — save_if_needed on
-        // the next navigation would resurrect labels/<deleted-stem>.yaml.
+        // the next navigation would resurrect vlabels/<deleted-stem>.json5.
         self.forget_image(&image_path);
 
         if self.images.is_empty() {

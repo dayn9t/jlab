@@ -790,7 +790,7 @@ mod tests {
 
         assert_eq!(items.len(), 1);
         assert_eq!((items[0].width, items[0].height), (4, 2));
-        assert_eq!(items[0].annotation.objects.len(), 0); // no yaml -> empty label
+        assert_eq!(items[0].annotation.objects.len(), 0); // no vlabels/p.json5 -> empty label
         let _ = fs::remove_dir_all(&root);
     }
 }
