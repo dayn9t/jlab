@@ -596,7 +596,7 @@ impl Canvas {
             points.iter().map(|p| self.normalized_to_screen(p, image_rect, image_size)).collect();
 
         // Draw polygon edges
-        let stroke_width = if is_selected { 3.0 } else { 2.0 };
+        let stroke_width = if is_selected { 3.0_f32 } else { 2.0_f32 };
         let stroke = Stroke::new(stroke_width, color);
 
         for i in 0..screen_points.len() {
@@ -629,7 +629,7 @@ impl Canvas {
                 if is_filled {
                     painter.circle_filled(*point, radius, vertex_color);
                 }
-                painter.circle_stroke(*point, radius, Stroke::new(2.0, Color32::WHITE));
+                painter.circle_stroke(*point, radius, Stroke::new(2.0_f32, Color32::WHITE));
             }
         }
     }
@@ -652,20 +652,23 @@ impl Canvas {
 
         // Draw lines between points
         for i in 0..screen_points.len().saturating_sub(1) {
-            painter.line_segment([screen_points[i], screen_points[i + 1]], Stroke::new(2.0, color));
+            painter.line_segment(
+                [screen_points[i], screen_points[i + 1]],
+                Stroke::new(2.0_f32, color),
+            );
         }
 
         // Draw vertices
         for point in &screen_points {
             painter.circle_filled(*point, 3.0, color);
-            painter.circle_stroke(*point, 3.0, Stroke::new(1.0, Color32::WHITE));
+            painter.circle_stroke(*point, 3.0, Stroke::new(1.0_f32, Color32::WHITE));
         }
 
         // Draw line from last point to first (for preview)
         if screen_points.len() > 2 {
             painter.line_segment(
                 [*screen_points.last().unwrap(), screen_points[0]],
-                Stroke::new(1.0, color.linear_multiply(0.5)),
+                Stroke::new(1.0_f32, color.linear_multiply(0.5)),
             );
         }
     }
@@ -996,7 +999,7 @@ impl Canvas {
             let next_pos = start + direction * next_distance;
 
             if is_dash {
-                painter.line_segment([current_pos, next_pos], Stroke::new(1.0, color));
+                painter.line_segment([current_pos, next_pos], Stroke::new(1.0_f32, color));
             }
 
             current_pos = next_pos;
