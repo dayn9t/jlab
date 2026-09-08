@@ -1166,30 +1166,8 @@ impl Default for ShortcutManager {
     }
 }
 
+// Tests live in their own file (declared with `#[path]`, same pattern as
+// `state_persistence.rs`) to keep this file away from the length hard limit.
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_shortcuts_roundtrip_and_hand_edit_tolerance() {
-        let dir = std::env::temp_dir().join("vlabel_shortcuts_json5_test");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("shortcuts.json5");
-
-        let manager = ShortcutManager::new();
-        manager.save_to_file(&path).unwrap();
-        let loaded = ShortcutManager::load_from_file(&path).unwrap();
-        assert_eq!(
-            loaded.get_config().shortcuts.len(),
-            manager.get_config().shortcuts.len()
-        );
-
-        // 手改：文件头加注释（JSON5 宽容读）
-        let hand_edited = format!("// edited by hand\n{}", std::fs::read_to_string(&path).unwrap());
-        std::fs::write(&path, hand_edited).unwrap();
-        ShortcutManager::load_from_file(&path).unwrap();
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-}
+#[path = "shortcuts_tests.rs"]
+mod tests;
