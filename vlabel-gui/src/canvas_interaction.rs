@@ -58,17 +58,29 @@ impl Canvas {
             let bg_color = ui.ctx().style().visuals.panel_fill;
             painter.rect_filled(rect, 0.0, bg_color);
 
-            // Get or create texture for the image
-            let texture_id = format!("{:?}", image_data.path);
-            let texture = self.texture_cache.entry(texture_id.clone()).or_insert_with(|| {
-                // Convert pixels to ColorImage
+            // Get or create the display texture: the ROI film is baked into
+            // the pixels, so the cache key includes the ROI content — any ROI
+            // edit (add/remove/move vertex/paste/lock propagation) produces a
+            // new key and re-bakes the film.
+            let rois: Vec<vlabel_core::Polygon<f32>> =
+                label.map(|l| l.rois.clone()).unwrap_or_default();
+            let texture_key = format!("{:?}|{:?}", image_data.path, rois);
+            if self.texture_cache.as_ref().map_or(true, |(k, _)| *k != texture_key) {
+                let mut pixels = image_data.pixels.clone();
+                crate::roi_film::apply_roi_film(
+                    &mut pixels,
+                    image_data.width as usize,
+                    image_data.height as usize,
+                    &rois,
+                );
                 let color_image = ColorImage::from_rgba_unmultiplied(
                     [image_data.width as usize, image_data.height as usize],
-                    &image_data.pixels,
+                    &pixels,
                 );
-                // Load texture
-                ui.ctx().load_texture(&texture_id, color_image, Default::default())
-            });
+                let texture = ui.ctx().load_texture(&texture_key, color_image, Default::default());
+                self.texture_cache = Some((texture_key, texture));
+            }
+            let texture = &self.texture_cache.as_ref().expect("texture just ensured").1;
 
             // Draw the actual image texture
             painter.image(

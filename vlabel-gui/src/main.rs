@@ -2,6 +2,7 @@ mod app;
 mod canvas;
 mod geometry;
 mod i18n;
+mod roi_film;
 mod shortcuts;
 mod state;
 mod tools;

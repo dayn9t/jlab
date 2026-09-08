@@ -1,5 +1,4 @@
 use egui::{Color32, Pos2, Rect, Stroke, TextureHandle, Vec2};
-use std::collections::HashMap;
 use vlabel_core::{Label, LabelMeta, Point};
 
 // Pointer-event handling and hit-testing live in `canvas_interaction.rs`,
@@ -23,8 +22,10 @@ pub struct Canvas {
     /// Pan offset in screen coordinates
     pub pan_offset: Vec2,
 
-    /// Texture cache for loaded images
-    texture_cache: HashMap<String, TextureHandle>,
+    /// Display texture cache: only the current image is ever shown, and the
+    /// key includes the ROI content (film is baked in, so any ROI edit needs
+    /// a re-bake). A single-entry cache drops the stale texture on replace.
+    texture_cache: Option<(String, TextureHandle)>,
 
     /// Currently dragging vertex (object_id, vertex_index)
     dragging_vertex: Option<(i32, usize)>,
@@ -44,7 +45,7 @@ impl Canvas {
         Self {
             zoom: 1.0,
             pan_offset: Vec2::ZERO,
-            texture_cache: HashMap::new(),
+            texture_cache: None,
             dragging_vertex: None,
             dragging_object: None,
             pending_click: None,
