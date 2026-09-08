@@ -407,4 +407,44 @@ mod tests {
         assert!(!project.images_dir().join("b.jpg").exists());
         let _ = fs::remove_dir_all(&root);
     }
+
+    // --- negative-sample preservation (R1): YOLO frames with no boxes must
+    // land in the project as empty vlabels, not be silently skipped ---
+
+    #[test]
+    fn merge_imports_yolo_negative_samples_as_empty_vlabels() {
+        let (root, project) = make_project("merge-negative");
+        let yolo = root.join("yolo");
+        fs::create_dir_all(yolo.join("images")).unwrap();
+        fs::create_dir_all(yolo.join("labels")).unwrap();
+        // blank label file (negative sample) and a missing label file entirely
+        fs::write(yolo.join("images/blank.jpg"), b"fake").unwrap();
+        fs::write(yolo.join("labels/blank.txt"), "").unwrap();
+        fs::write(yolo.join("images/no_label.jpg"), b"fake").unwrap();
+        // positive frame for contrast
+        fs::write(yolo.join("images/pos.jpg"), b"fake").unwrap();
+        fs::write(yolo.join("labels/pos.txt"), "0 0.5 0.5 0.2 0.2\n").unwrap();
+
+        let imported = crate::import::import_from_yolo(&yolo, &project.meta).unwrap();
+
+        crate::import::merge_imported_images(
+            imported,
+            &project,
+            &Default::default(),
+            "duplicate: {name}",
+        )
+        .unwrap();
+
+        for stem in ["blank", "no_label", "pos"] {
+            let path = project.annotation_path(&format!("{stem}.jpg"));
+            assert!(path.exists(), "vlabel for {stem} must exist");
+        }
+        for stem in ["blank", "no_label"] {
+            let label = project.load_annotation(&format!("{stem}.jpg")).unwrap().unwrap();
+            assert!(label.objects.is_empty(), "{stem} is a negative sample: objects must be empty");
+        }
+        let pos = project.load_annotation("pos.jpg").unwrap().unwrap();
+        assert_eq!(pos.objects.len(), 1);
+        let _ = fs::remove_dir_all(&root);
+    }
 }

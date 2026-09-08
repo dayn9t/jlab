@@ -667,6 +667,21 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn import_from_yolo_blank_label_file_gives_empty_annotation() {
+        // Negative-sample frames: a present-but-blank label file must import
+        // as a vlabel with zero objects, not be skipped.
+        let root = temp_root("yolo-blank");
+        fs::write(root.join("images/c.png"), b"fake").unwrap();
+        fs::write(root.join("labels/c.txt"), "  \n\n").unwrap();
+
+        let imported = import_from_yolo(&root, &test_meta()).unwrap();
+
+        assert_eq!(imported.len(), 1);
+        assert!(imported[0].annotation.objects.is_empty());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn rect_polygon_clamps_and_swaps() {
         let p = rect_polygon(-0.1, 0.8, 0.5, 0.2);
         assert_eq!(p.0.len(), 4);
