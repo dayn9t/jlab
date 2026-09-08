@@ -1,9 +1,9 @@
 use vlabel_core::io::{load_annotation, load_meta};
 
 fn main() {
-    // Load meta.yaml
-    println!("Loading meta.yaml...");
-    match load_meta("label_root/meta.yaml") {
+    // Load meta.json5
+    println!("Loading meta.json5...");
+    match load_meta("label_root/meta.json5") {
         Ok(meta) => {
             println!("  ID: {}", meta.id);
             println!("  Name: {}", meta.name);
@@ -19,8 +19,8 @@ fn main() {
     println!();
 
     // Load annotation
-    println!("Loading labels/0001.yaml...");
-    match load_annotation("label_root/labels/0001.yaml") {
+    println!("Loading vlabels/0001.json5...");
+    match load_annotation("label_root/vlabels/0001.json5") {
         Ok(label) => {
             println!("  Version: {}", label.version);
             println!("  User agent: {}", label.user_agent);
