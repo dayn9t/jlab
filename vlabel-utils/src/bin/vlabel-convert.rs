@@ -1,10 +1,12 @@
 //! Non-interactive annotation format converter for VLabel projects.
 //!
 //! Usage:
-//!   vlabel-convert import --format <yolo|voc|coco|labelme> <src> <project_dir>
+//!   vlabel-convert import --format <yolo|voc|coco|labelme> [--roi <file>] <src> <project_dir>
 //!       (coco: <src> is the annotation json; `--images <dir>` is required)
-//!   vlabel-convert export --format <yolo|voc|coco|labelme> <project_dir> <out_dir>
+//!   vlabel-convert export --format <yolo|voc|coco|labelme> [--no-mask] [--symlink]
+//!       <project_dir> <out_dir>  (yolo-only image options)
 //!   vlabel-convert migrate-yaml [--global] <project_dir>
+//!   vlabel-convert verify-roundtrip [--iou-tolerance 0.001] [--report <file.jsonl>] <yolo_src>
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -74,6 +76,19 @@ enum Command {
         #[arg(long)]
         global: bool,
     },
+    /// Verify YOLO round-trip fidelity: import the source into a throwaway
+    /// project, re-export it (no masking), and reconcile every box against
+    /// the source. Exits non-zero on any mismatch.
+    VerifyRoundtrip {
+        /// YOLO source root (images/ + labels/; classes.txt optional)
+        src: PathBuf,
+        /// Boxes match when classes are equal and IoU >= 1 - tolerance
+        #[arg(long, default_value_t = 0.001)]
+        iou_tolerance: f32,
+        /// Write one JSON line per difference to this file
+        #[arg(long)]
+        report: Option<PathBuf>,
+    },
 }
 
 #[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +135,47 @@ fn run() -> Result<()> {
             );
             Ok(())
         }
+        Command::VerifyRoundtrip { src, iou_tolerance, report } => {
+            run_verify_roundtrip(src, iou_tolerance, report)
+        }
+    }
+}
+
+fn run_verify_roundtrip(
+    src: PathBuf,
+    iou_tolerance: f32,
+    report_path: Option<PathBuf>,
+) -> Result<()> {
+    let report =
+        vlabel_utils::roundtrip::verify_yolo_roundtrip(&src, iou_tolerance, report_path.as_deref())
+            .with_context(|| {
+                format!("round-trip verification failed to run in {}", src.display())
+            })?;
+
+    println!(
+        "round-trip: {} frames | src {} boxes / out {} | matched {} missing {} extra {} | max coord delta {:.6}",
+        report.frames,
+        report.boxes_src,
+        report.boxes_out,
+        report.matched,
+        report.missing,
+        report.extra,
+        report.max_delta
+    );
+    if report.is_pass() {
+        println!("round-trip PASS");
+        Ok(())
+    } else {
+        let where_line = match &report_path {
+            Some(p) => format!("; differences written to {}", p.display()),
+            None => "; re-run with --report <file.jsonl> for the difference list".to_string(),
+        };
+        anyhow::bail!(
+            "round-trip FAIL: {} missing, {} extra box(es), {} frame(s) lost{where_line}",
+            report.missing,
+            report.extra,
+            report.frame_missing
+        )
     }
 }
 
