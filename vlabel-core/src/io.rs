@@ -2,31 +2,31 @@ use crate::{Label, LabelMeta, Result};
 use std::fs;
 use std::path::Path;
 
-/// Load metadata from a YAML file
+/// Load metadata from a JSON5 file
 pub fn load_meta<P: AsRef<Path>>(path: P) -> Result<LabelMeta> {
     let content = fs::read_to_string(path)?;
-    let meta: LabelMeta = serde_yaml::from_str(&content)?;
+    let meta: LabelMeta = json5::from_str(&content)?;
     Ok(meta)
 }
 
-/// Save metadata to a YAML file
+/// Save metadata to a JSON5 file
 pub fn save_meta<P: AsRef<Path>>(path: P, meta: &LabelMeta) -> Result<()> {
-    let yaml = serde_yaml::to_string(meta)?;
-    fs::write(path, yaml)?;
+    let json5 = json5::to_string(meta)?;
+    fs::write(path, json5)?;
     Ok(())
 }
 
-/// Load annotation from a YAML file
+/// Load annotation from a JSON5 file
 pub fn load_annotation<P: AsRef<Path>>(path: P) -> Result<Label> {
     let content = fs::read_to_string(path)?;
-    let annotation: Label = serde_yaml::from_str(&content)?;
+    let annotation: Label = json5::from_str(&content)?;
     Ok(annotation)
 }
 
-/// Save annotation to a YAML file
+/// Save annotation to a JSON5 file
 pub fn save_annotation<P: AsRef<Path>>(path: P, annotation: &Label) -> Result<()> {
-    let yaml = serde_yaml::to_string(annotation)?;
-    fs::write(path, yaml)?;
+    let json5 = json5::to_string(annotation)?;
+    fs::write(path, json5)?;
     Ok(())
 }
 
@@ -40,7 +40,7 @@ mod tests {
     #[test]
     fn test_save_and_load_annotation() {
         let temp_dir = std::env::temp_dir();
-        let test_file = temp_dir.join("test_annotation.yaml");
+        let test_file = temp_dir.join("test_annotation.json5");
 
         let mut label = new_label("test-tool");
         let obj = new_object(
@@ -65,6 +65,39 @@ mod tests {
         assert_eq!(loaded.objects.len(), label.objects.len());
 
         // Cleanup
+        let _ = fs::remove_file(test_file);
+    }
+
+    #[test]
+    fn test_load_annotation_with_hand_edits() {
+        // 手改文件：注释 + 尾逗号 + 无引号 key 必须可解析（JSON5 宽容读）
+        let content = "{
+  // hand-edited comment
+  version: '2.0',
+  user_agent: 'test-tool',
+  created_at: '2025-08-22T13:51:35.005806093Z',
+  last_modified: '2025-08-22T13:51:35.005806093Z',
+  rois: [],
+  objects: [
+    {
+      id: 1,
+      category: 0,
+      confidence: 1.0,
+      polygon: [{ x: 0.1, y: 0.1 }, { x: 0.5, y: 0.5 }],
+      properties: [],
+    },
+  ],
+}";
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_annotation_hand_edit.json5");
+        fs::write(&test_file, content).unwrap();
+
+        let loaded = load_annotation(&test_file).unwrap();
+
+        assert_eq!(loaded.version, "2.0");
+        assert_eq!(loaded.objects.len(), 1);
+        assert_eq!(loaded.objects[0].polygon.0.len(), 2);
+
         let _ = fs::remove_file(test_file);
     }
 }

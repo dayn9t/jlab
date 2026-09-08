@@ -131,41 +131,41 @@ mod tests {
 
     #[test]
     fn test_rois_deserialize_single() {
-        let yaml = r#"
-version: "2.0"
-user_agent: "test"
-created_at: "2024-01-01T00:00:00+08:00"
-last_modified: "2024-01-01T00:00:00+08:00"
-rois:
-  - - {x: 0.1, y: 0.1}
-    - {x: 0.2, y: 0.1}
-    - {x: 0.2, y: 0.2}
-objects: []
+        let json5 = r#"
+{
+  version: "2.0",
+  user_agent: "test",
+  created_at: "2024-01-01T00:00:00+08:00",
+  last_modified: "2024-01-01T00:00:00+08:00",
+  rois: [
+    [{x: 0.1, y: 0.1}, {x: 0.2, y: 0.1}, {x: 0.2, y: 0.2}],
+  ],
+  objects: [],
+}
 "#;
 
-        let label: Label = serde_yaml::from_str(yaml).unwrap();
+        let label: Label = json5::from_str(json5).unwrap();
         assert_eq!(label.rois.len(), 1);
         assert_eq!(label.rois[0].0.len(), 3);
     }
 
     #[test]
     fn test_rois_deserialize_multiple() {
-        let yaml = r#"
-version: "2.0"
-user_agent: "test"
-created_at: "2024-01-01T00:00:00+08:00"
-last_modified: "2024-01-01T00:00:00+08:00"
-rois:
-  - - {x: 0.1, y: 0.1}
-    - {x: 0.2, y: 0.1}
-    - {x: 0.2, y: 0.2}
-  - - {x: 0.4, y: 0.4}
-    - {x: 0.5, y: 0.4}
-    - {x: 0.5, y: 0.5}
-objects: []
+        let json5 = r#"
+{
+  version: "2.0",
+  user_agent: "test",
+  created_at: "2024-01-01T00:00:00+08:00",
+  last_modified: "2024-01-01T00:00:00+08:00",
+  rois: [
+    [{x: 0.1, y: 0.1}, {x: 0.2, y: 0.1}, {x: 0.2, y: 0.2}],
+    [{x: 0.4, y: 0.4}, {x: 0.5, y: 0.4}, {x: 0.5, y: 0.5}],
+  ],
+  objects: [],
+}
 "#;
 
-        let label: Label = serde_yaml::from_str(yaml).unwrap();
+        let label: Label = json5::from_str(json5).unwrap();
         assert_eq!(label.rois.len(), 2);
         assert_eq!(label.rois[0].0.len(), 3);
     }

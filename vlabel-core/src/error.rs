@@ -5,8 +5,8 @@ pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("YAML serialization error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    #[error("JSON5 serialization error: {0}")]
+    Json5(#[from] json5::Error),
 
     #[error("Invalid data: {0}")]
     InvalidData(String),
