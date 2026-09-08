@@ -17,10 +17,7 @@ fn test_shortcuts_roundtrip_and_hand_edit_tolerance() {
     let manager = ShortcutManager::new();
     manager.save_to_file(&path).unwrap();
     let loaded = ShortcutManager::load_from_file(&path).unwrap();
-    assert_eq!(
-        loaded.get_config().shortcuts.len(),
-        manager.get_config().shortcuts.len()
-    );
+    assert_eq!(loaded.get_config().shortcuts.len(), manager.get_config().shortcuts.len());
 
     // 手改：文件头加注释（JSON5 宽容读）
     let hand_edited = format!("// edited by hand\n{}", std::fs::read_to_string(&path).unwrap());

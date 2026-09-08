@@ -90,7 +90,7 @@ pub fn export_yolo_classes_txt(meta: &LabelMeta, out_path: &Path) -> anyhow::Res
 }
 
 /// Guard against exporting a dataset on top of the project itself: exporting
-/// into the project root, its `images/` dir, or its `labels/` dir would
+/// into the project root, its `images/` dir, or its `vlabels/` dir would
 /// overwrite the project's own images in place with masked/lossy copies (YOLO
 /// export writes `<out>/images` and `<out>/labels`, so the project root is
 /// equally dangerous). Both paths are resolved (symlinks + `..`) before
@@ -694,7 +694,7 @@ mod tests {
 
     #[test]
     fn ensure_safe_export_dir_rejects_project_dirs() {
-        let root = temp_dir("guard1"); // images/ and labels/ intentionally absent
+        let root = temp_dir("guard1"); // images/ and vlabels/ intentionally absent
         assert!(ensure_safe_export_dir(&root, &root).is_err());
         assert!(ensure_safe_export_dir(&root, &root.join("images")).is_err());
         assert!(ensure_safe_export_dir(&root, &root.join("vlabels")).is_err());

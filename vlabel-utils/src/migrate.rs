@@ -39,8 +39,11 @@ fn migrate_one<T: Serialize + DeserializeOwned>(src: &Path) -> Result<()> {
         fs::read_to_string(src).with_context(|| format!("failed to read {}", src.display()))?;
     let value: T = serde_yaml::from_str(&content)
         .with_context(|| format!("failed to parse YAML {}", src.display()))?;
-    fs::write(&dst, json5::to_string(&value)?)?;
-    let _verify: T = json5::from_str(&fs::read_to_string(&dst)?)
+    fs::write(&dst, json5::to_string(&value)?)
+        .with_context(|| format!("failed to write {}", dst.display()))?;
+    let written = fs::read_to_string(&dst)
+        .with_context(|| format!("failed to read back {}", dst.display()))?;
+    let _verify: T = json5::from_str(&written)
         .with_context(|| format!("verification failed for {}", dst.display()))?;
     fs::remove_file(src).with_context(|| format!("failed to remove {}", src.display()))?;
     Ok(())
@@ -145,10 +148,7 @@ mod tests {
         let obj = new_object(
             0,
             1,
-            Polygon::from(vec![
-                Point { x: 0.1, y: 0.1 },
-                Point { x: 0.5, y: 0.5 },
-            ]),
+            Polygon::from(vec![Point { x: 0.1, y: 0.1 }, Point { x: 0.5, y: 0.5 }]),
         );
         let mut label = label;
         add_object(&mut label, obj);
