@@ -19,6 +19,7 @@ use vlabel_utils::import::{
     merge_imported_images, ImportedImage,
 };
 use vlabel_utils::migrate;
+use vlabel_utils::roi_inject;
 use vlabel_utils::Project;
 
 #[derive(Parser)]
@@ -40,6 +41,10 @@ enum Command {
         /// Images directory (required when --format coco)
         #[arg(long)]
         images: Option<PathBuf>,
+        /// JSON5 map of file-stem prefix → ROI polygons to inject into the
+        /// imported frames, e.g. {"1": [[[0,0],[1,0],[1,1],[0,1]]]}
+        #[arg(long, value_name = "FILE")]
+        roi: Option<PathBuf>,
         /// Target VLabel project directory (must contain meta.json5)
         project: PathBuf,
     },
@@ -84,8 +89,8 @@ fn main() {
 fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Import { format, src, images, project } => {
-            run_import(format, src, images, project)
+        Command::Import { format, src, images, roi, project } => {
+            run_import(format, src, images, roi, project)
         }
         Command::Export { format, project, out } => run_export(format, project, out),
         Command::MigrateYaml { project, global } => {
@@ -112,6 +117,7 @@ fn run_import(
     format: Format,
     src: PathBuf,
     images: Option<PathBuf>,
+    roi: Option<PathBuf>,
     project_dir: PathBuf,
 ) -> Result<()> {
     let project = Project::open(&project_dir).context(
@@ -125,7 +131,7 @@ fn run_import(
         .filter_map(|p| p.file_name().and_then(|s| s.to_str()).map(|s| s.to_string()))
         .collect::<HashSet<String>>();
 
-    let imported: Vec<ImportedImage> = match format {
+    let mut imported: Vec<ImportedImage> = match format {
         Format::Yolo => import_from_yolo(&src, &meta)?,
         Format::Voc => import_from_voc(&src, &meta)?,
         Format::Coco => {
@@ -134,6 +140,26 @@ fn run_import(
         }
         Format::LabelMe => import_from_labelme(&src, &meta)?,
     };
+
+    if let Some(roi_path) = &roi {
+        let rules = roi_inject::RoiRules::parse_file(roi_path)?;
+        let mut matched = 0usize;
+        for item in &mut imported {
+            if rules.apply_to_label(&mut item.annotation, &item.file_name)? {
+                matched += 1;
+            }
+        }
+        let unmatched = imported.len() - matched;
+        println!("roi injection: {matched} frame(s) matched, {unmatched} without a rule");
+        if unmatched > 0 {
+            // Visible, not silent: frames without a rule keep no ROI, which on
+            // export means no letterbox masking for them.
+            log::warn!(
+                "{unmatched} imported frame(s) matched no ROI rule in {}",
+                roi_path.display()
+            );
+        }
+    }
 
     let total_boxes = imported.iter().map(|item| item.annotation.objects.len()).sum::<usize>();
     let count = imported.len();

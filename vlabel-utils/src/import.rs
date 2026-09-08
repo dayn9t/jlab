@@ -310,7 +310,7 @@ pub fn merge_imported_images(
 }
 
 /// Extract the file stem (name without extension); annotation files are keyed by stem.
-fn image_stem(file_name: &str) -> &str {
+pub(crate) fn image_stem(file_name: &str) -> &str {
     Path::new(file_name).file_stem().and_then(|s| s.to_str()).unwrap_or(file_name)
 }
 
