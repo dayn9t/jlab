@@ -502,12 +502,12 @@ impl ShortcutManager {
         Self { bindings, config }
     }
 
-    /// Load configuration from YAML file
+    /// Load configuration from JSON5 file
     pub fn load_from_file(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read shortcuts config from {:?}", path))?;
 
-        let config: ShortcutConfig = serde_yaml::from_str(&content)
+        let config: ShortcutConfig = json5::from_str(&content)
             .with_context(|| format!("Failed to parse shortcuts config from {:?}", path))?;
 
         let bindings = Self::build_bindings(&config);
@@ -515,7 +515,7 @@ impl ShortcutManager {
         Ok(Self { bindings, config })
     }
 
-    /// Save configuration to YAML file
+    /// Save configuration to JSON5 file
     pub fn save_to_file(&self, path: &Path) -> Result<()> {
         // Create parent directory if it doesn't exist
         if let Some(parent) = path.parent() {
@@ -524,7 +524,7 @@ impl ShortcutManager {
         }
 
         let content =
-            serde_yaml::to_string(&self.config).context("Failed to serialize shortcuts config")?;
+            json5::to_string(&self.config).context("Failed to serialize shortcuts config")?;
 
         std::fs::write(path, content)
             .with_context(|| format!("Failed to write shortcuts config to {:?}", path))?;
@@ -826,7 +826,7 @@ impl ShortcutManager {
     /// Get user config file path
     pub fn user_config_path() -> Option<std::path::PathBuf> {
         Self::user_config_dir().map(|mut path| {
-            path.push("shortcuts.yaml");
+            path.push("shortcuts.json5");
             path
         })
     }
@@ -851,7 +851,7 @@ impl ShortcutManager {
         let mut manager = Self::load_user_config()?;
 
         // Try to load project config
-        let project_config_path = project_dir.join("shortcuts.yaml");
+        let project_config_path = project_dir.join("shortcuts.json5");
         if project_config_path.exists() {
             log::info!("Loading project shortcuts config from {:?}", project_config_path);
             let project_config: ShortcutConfig = {
@@ -861,7 +861,7 @@ impl ShortcutManager {
                         project_config_path
                     )
                 })?;
-                serde_yaml::from_str(&content).with_context(|| {
+                json5::from_str(&content).with_context(|| {
                     format!(
                         "Failed to parse project shortcuts config from {:?}",
                         project_config_path
@@ -1163,5 +1163,33 @@ impl ShortcutEditorState {
 impl Default for ShortcutManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shortcuts_roundtrip_and_hand_edit_tolerance() {
+        let dir = std::env::temp_dir().join("vlabel_shortcuts_json5_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("shortcuts.json5");
+
+        let manager = ShortcutManager::new();
+        manager.save_to_file(&path).unwrap();
+        let loaded = ShortcutManager::load_from_file(&path).unwrap();
+        assert_eq!(
+            loaded.get_config().shortcuts.len(),
+            manager.get_config().shortcuts.len()
+        );
+
+        // 手改：文件头加注释（JSON5 宽容读）
+        let hand_edited = format!("// edited by hand\n{}", std::fs::read_to_string(&path).unwrap());
+        std::fs::write(&path, hand_edited).unwrap();
+        ShortcutManager::load_from_file(&path).unwrap();
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
