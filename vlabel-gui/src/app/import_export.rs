@@ -3,7 +3,7 @@ use anyhow::Context;
 use std::collections::HashSet;
 use vlabel_utils::conversion::{
     collect_export_items, ensure_safe_export_dir, export_dataset_coco, export_dataset_labelme,
-    export_dataset_voc, export_dataset_yolo,
+    export_dataset_voc, export_dataset_yolo, YoloExportOptions,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -121,9 +121,14 @@ impl LabApp {
         let export_items = collect_export_items(project)?;
 
         match format {
-            DatasetFormat::Yolo => {
-                export_dataset_yolo(project, &export_items, &meta, &output_root)?
-            }
+            DatasetFormat::Yolo => export_dataset_yolo(
+                project,
+                &export_items,
+                &meta,
+                &output_root,
+                // GUI export keeps the historical behavior (mask + copy).
+                &YoloExportOptions::default(),
+            )?,
             DatasetFormat::Voc => export_dataset_voc(project, &export_items, &meta, &output_root)?,
             DatasetFormat::Coco => {
                 export_dataset_coco(project, &export_items, &meta, &output_root)?

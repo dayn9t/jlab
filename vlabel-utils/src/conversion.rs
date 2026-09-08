@@ -150,14 +150,65 @@ fn attach_normalized(mut full: PathBuf, tail: &[std::path::Component]) -> PathBu
     full
 }
 
-/// Write one export image for the YOLO driver: when the annotation has ROIs,
-/// the area outside every ROI is painted `mask::MASK_GRAY`; without ROIs the
-/// image is copied byte-identically. Returns whether the image was actually
-/// masked (masked images must be re-encoded; verbatim copies are not).
-pub fn export_image_roi_masked(item: &ExportItem, images_dir: &Path) -> anyhow::Result<bool> {
+/// Options for the YOLO dataset export driver.
+#[derive(Debug, Clone)]
+pub struct YoloExportOptions {
+    /// Paint the area outside annotation ROIs with letterbox gray (default).
+    /// `false` = coordinate-only export: images are never re-encoded.
+    pub mask_outside_rois: bool,
+    /// Link images into the export instead of copying them (default: copy).
+    /// Masked images are still written as real files — a symlink can only
+    /// reference the original, unmasked project image.
+    pub link_images: bool,
+}
+
+impl Default for YoloExportOptions {
+    fn default() -> Self {
+        Self { mask_outside_rois: true, link_images: false }
+    }
+}
+
+/// Write `src` to `dst` as a symlink (`link`) or a byte copy. Symlink targets
+/// are canonicalized so the link stays valid from any working directory;
+/// an existing `dst` (including a stale symlink) is replaced first, matching
+/// the overwrite semantics of `fs::copy`.
+pub(crate) fn link_or_copy(src: &Path, dst: &Path, link: bool) -> anyhow::Result<()> {
+    if !link {
+        fs::copy(src, dst)
+            .with_context(|| format!("failed to copy {} -> {}", src.display(), dst.display()))?;
+        return Ok(());
+    }
+    #[cfg(unix)]
+    {
+        let target =
+            src.canonicalize().with_context(|| format!("failed to resolve {}", src.display()))?;
+        if dst.symlink_metadata().is_ok() {
+            fs::remove_file(dst)?;
+        }
+        std::os::unix::fs::symlink(&target, dst).with_context(|| {
+            format!("failed to symlink {} -> {}", target.display(), dst.display())
+        })?;
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        anyhow::bail!("linking images requires a Unix platform; use copying instead")
+    }
+}
+
+/// Write one export image for the YOLO driver: when the annotation has ROIs
+/// and `options.mask_outside_rois`, the area outside every ROI is painted
+/// `mask::MASK_GRAY`; otherwise the image is written verbatim (linked when
+/// `options.link_images`). Returns whether the image was actually masked
+/// (masked images must be re-encoded; verbatim writes are not).
+pub fn export_image_yolo(
+    item: &ExportItem,
+    images_dir: &Path,
+    options: &YoloExportOptions,
+) -> anyhow::Result<bool> {
     let out_path = images_dir.join(&item.file_name);
-    if item.annotation.rois.is_empty() {
-        fs::copy(&item.image_path, &out_path)?;
+    if !options.mask_outside_rois || item.annotation.rois.is_empty() {
+        link_or_copy(&item.image_path, &out_path, options.link_images)?;
         return Ok(false);
     }
 
@@ -167,7 +218,7 @@ pub fn export_image_roi_masked(item: &ExportItem, images_dir: &Path) -> anyhow::
     if masked.as_bytes() == img.to_rgba8().as_raw().as_slice() {
         // The ROIs cover every pixel, so masking changed nothing: keep the
         // original bytes instead of taking a lossy re-encode.
-        fs::copy(&item.image_path, &out_path)?;
+        link_or_copy(&item.image_path, &out_path, options.link_images)?;
         return Ok(false);
     }
 
@@ -222,15 +273,17 @@ pub fn collect_export_items(project: &Project) -> anyhow::Result<Vec<ExportItem>
 /// Refuses output directories that would overwrite the project itself.
 ///
 /// Unlike the VOC/COCO/LabelMe drivers, images whose annotation has ROIs are
-/// written with the area outside the ROIs painted `mask::MASK_GRAY`: an ROI
-/// means "only this region is training signal", and letterbox gray matches
-/// what YOLO sees as padding. Images without ROIs — and ROIs covering every
-/// pixel — are copied byte-identically (see `export_image_roi_masked`).
+/// written with the area outside the ROIs painted `mask::MASK_GRAY` (disable
+/// with `YoloExportOptions::mask_outside_rois = false` for a coordinate-only
+/// export): an ROI means "only this region is training signal", and letterbox
+/// gray matches what YOLO sees as padding. Images without ROIs — and ROIs
+/// covering every pixel — are copied byte-identically (see `export_image_yolo`).
 pub fn export_dataset_yolo(
     project: &Project,
     items: &[ExportItem],
     meta: &LabelMeta,
     out_dir: &Path,
+    options: &YoloExportOptions,
 ) -> anyhow::Result<()> {
     ensure_safe_export_dir(&project.root, out_dir)?;
     let images_dir = out_dir.join("images");
@@ -251,7 +304,7 @@ pub fn export_dataset_yolo(
             item.height,
             ExportFormat::Yolo,
         )?;
-        if export_image_roi_masked(item, &images_dir)? {
+        if export_image_yolo(item, &images_dir, options)? {
             masked_count += 1;
         }
     }
@@ -262,9 +315,28 @@ pub fn export_dataset_yolo(
             "YOLO export: painted the area outside the ROIs of {masked_count}/{} image(s) with letterbox gray; VOC/COCO/LabelMe exports copy images verbatim",
             items.len()
         );
+        if options.link_images {
+            log::warn!(
+                "YOLO export: those {masked_count} masked image(s) were written as real files, not symlinks — masking changes their bytes"
+            );
+        }
     }
     Ok(())
 }
+
+// TODO(properties-export): classifier training-set export — VLabel object
+// properties → ImageFolder layout (`out/<property-value>/<stem>_<obj-id>.<ext>`).
+// Deliberately not implemented yet; design sketch:
+//   vlabel-convert export --format imagefolder --property <id> [--crop margin]
+//       [--split train:val] <project_dir> <out_dir>
+// - crop = object bbox + margin (default 0.05), written as a real re-encoded
+//   file (crop changes bytes, so --symlink never applies);
+// - folder name = property *value name* from meta (not raw id) so the dir tree
+//   is self-describing; objects missing the property land in `unlabeled/`
+//   rather than being silently dropped;
+// - frames without objects contribute nothing (a classification set has no
+//   negative-sample concept; the detection pipeline keeps that role);
+// - --split writes a deterministic (stem-hash) train/val split.
 
 /// VOC dataset export driver: writes `<out_dir>/JPEGImages` and
 /// `<out_dir>/Annotations` (one `<stem>.xml` per image).
@@ -549,7 +621,7 @@ mod tests {
         ]);
         let (item, _) = export_item(&dir, vec![roi]);
 
-        let masked = export_image_roi_masked(&item, &dir).unwrap();
+        let masked = export_image_yolo(&item, &dir, &YoloExportOptions::default()).unwrap();
         assert!(masked, "left-half ROI must trigger masking");
         let img = image::open(dir.join("a.png")).unwrap();
         assert_eq!(img.get_pixel(0, 0), image::Rgba([200, 10, 10, 255])); // inside ROI
@@ -566,12 +638,86 @@ mod tests {
     }
 
     #[test]
+    fn export_image_roi_mask_disabled_writes_original_bytes() {
+        let dir = temp_dir("mask-off");
+        let roi = Polygon::from(vec![
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 0.5, y: 0.0 },
+            Point { x: 0.5, y: 1.0 },
+            Point { x: 0.0, y: 1.0 },
+        ]);
+        let (item, src_path) = export_item(&dir, vec![roi]);
+        let options = YoloExportOptions { mask_outside_rois: false, ..Default::default() };
+
+        let masked = export_image_yolo(&item, &dir, &options).unwrap();
+        assert!(!masked, "--no-mask must never re-encode");
+        assert_eq!(
+            fs::read(dir.join("a.png")).unwrap(),
+            fs::read(&src_path).unwrap(),
+            "no-mask export keeps the original bytes despite the ROI"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn export_image_without_roi_is_copied_verbatim() {
         let dir = temp_dir("mask2");
         let (item, src_path) = export_item(&dir, vec![]);
 
-        export_image_roi_masked(&item, &dir).unwrap();
+        export_image_yolo(&item, &dir, &YoloExportOptions::default()).unwrap();
         assert_eq!(fs::read(dir.join("a.png")).unwrap(), fs::read(&src_path).unwrap());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn export_image_link_mode_symlinks_unmasked_images() {
+        let dir = temp_dir("link1");
+        let out_dir = dir.join("out");
+        fs::create_dir_all(&out_dir).unwrap();
+        let (item, _) = export_item(&dir, vec![]);
+        let options = YoloExportOptions { link_images: true, ..Default::default() };
+
+        export_image_yolo(&item, &out_dir, &options).unwrap();
+        let link = out_dir.join("a.png");
+        assert!(
+            link.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false),
+            "unmasked image must be a symlink in link mode"
+        );
+        assert!(fs::metadata(&link).is_ok(), "symlink must resolve to the source image");
+
+        // re-export over the existing symlink must not fail with "file exists"
+        export_image_yolo(&item, &out_dir, &options).unwrap();
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn export_image_link_mode_masks_write_real_files() {
+        let dir = temp_dir("link2");
+        let out_dir = dir.join("out");
+        fs::create_dir_all(&out_dir).unwrap();
+        let roi = Polygon::from(vec![
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 0.5, y: 0.0 },
+            Point { x: 0.5, y: 1.0 },
+            Point { x: 0.0, y: 1.0 },
+        ]);
+        let (item, src_path) = export_item(&dir, vec![roi]);
+        let options = YoloExportOptions { link_images: true, ..Default::default() };
+
+        let masked = export_image_yolo(&item, &out_dir, &options).unwrap();
+        assert!(masked);
+        let out = out_dir.join("a.png");
+        assert!(
+            out.symlink_metadata().map(|m| !m.file_type().is_symlink()).unwrap_or(false),
+            "masked image must be a real file even in link mode"
+        );
+        assert_ne!(
+            fs::read(&out).unwrap(),
+            fs::read(&src_path).unwrap(),
+            "masked bytes must differ from the original"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -614,7 +760,7 @@ mod tests {
 
         let out_dir = dir.join("out");
         fs::create_dir_all(&out_dir).unwrap();
-        export_image_roi_masked(&item, &out_dir).unwrap();
+        export_image_yolo(&item, &out_dir, &YoloExportOptions::default()).unwrap();
         assert_eq!(
             fs::read(out_dir.join("a.jpg")).unwrap(),
             fs::read(&src_path).unwrap(),
@@ -720,14 +866,16 @@ mod tests {
         let items = collect_export_items(&project).unwrap();
         let out = temp_dir("drv-yolo-out");
 
-        export_dataset_yolo(&project, &items, &project.meta, &out).unwrap();
+        export_dataset_yolo(&project, &items, &project.meta, &out, &YoloExportOptions::default())
+            .unwrap();
         assert!(out.join("images/p.png").exists());
         assert!(out.join("labels/p.txt").exists());
         assert!(out.join("classes.txt").exists());
 
         // exporting onto the project itself must fail without touching it
         let before = fs::read(root.join("images/p.png")).unwrap();
-        let err = export_dataset_yolo(&project, &items, &project.meta, &root).unwrap_err();
+        let err = export_dataset_yolo(&project, &items, &project.meta, &root, &Default::default())
+            .unwrap_err();
         assert!(format!("{err:#}").contains("project root"), "message was: {err:#}");
         assert_eq!(fs::read(root.join("images/p.png")).unwrap(), before);
         assert!(!root.join("classes.txt").exists());
@@ -744,7 +892,7 @@ mod tests {
         meta.categories[0].id = 1; // not 0-based
         let out = temp_dir("drv-yolo-bad-out");
 
-        assert!(export_dataset_yolo(&project, &items, &meta, &out).is_err());
+        assert!(export_dataset_yolo(&project, &items, &meta, &out, &Default::default()).is_err());
         assert!(!out.join("classes.txt").exists());
         assert!(out.join("images").read_dir().map(|mut d| d.next().is_none()).unwrap_or(true));
         assert!(out.join("labels").read_dir().map(|mut d| d.next().is_none()).unwrap_or(true));

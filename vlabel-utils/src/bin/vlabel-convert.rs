@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use vlabel_utils::conversion::{
     collect_export_items, ensure_safe_export_dir, export_dataset_coco, export_dataset_labelme,
-    export_dataset_voc, export_dataset_yolo,
+    export_dataset_voc, export_dataset_yolo, YoloExportOptions,
 };
 use vlabel_utils::import::{
     import_from_coco, import_from_labelme, import_from_voc, import_from_yolo,
@@ -53,6 +53,14 @@ enum Command {
         /// Dataset format
         #[arg(short, long)]
         format: Format,
+        /// YOLO only: skip letterbox-gray masking outside ROIs (coordinates-only
+        /// export; images are written verbatim)
+        #[arg(long)]
+        no_mask: bool,
+        /// YOLO only: symlink images into the export instead of copying
+        /// (masked images are still written as real files)
+        #[arg(long)]
+        symlink: bool,
         /// VLabel project directory
         project: PathBuf,
         /// Output directory
@@ -68,7 +76,7 @@ enum Command {
     },
 }
 
-#[derive(ValueEnum, Clone, Copy)]
+#[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
 enum Format {
     Yolo,
     Voc,
@@ -92,7 +100,9 @@ fn run() -> Result<()> {
         Command::Import { format, src, images, roi, project } => {
             run_import(format, src, images, roi, project)
         }
-        Command::Export { format, project, out } => run_export(format, project, out),
+        Command::Export { format, project, out, no_mask, symlink } => {
+            run_export(format, no_mask, symlink, project, out)
+        }
         Command::MigrateYaml { project, global } => {
             let global_path = if global {
                 Some(
@@ -169,7 +179,19 @@ fn run_import(
     Ok(())
 }
 
-fn run_export(format: Format, project_dir: PathBuf, out_dir: PathBuf) -> Result<()> {
+fn run_export(
+    format: Format,
+    no_mask: bool,
+    symlink: bool,
+    project_dir: PathBuf,
+    out_dir: PathBuf,
+) -> Result<()> {
+    // Both image options are YOLO-driver features; a silent no-op for the
+    // verbatim-copy formats would hide the mistake.
+    if format != Format::Yolo && (no_mask || symlink) {
+        anyhow::bail!("--no-mask and --symlink only apply to --format yolo");
+    }
+    let options = YoloExportOptions { mask_outside_rois: !no_mask, link_images: symlink };
     let project = Project::open(&project_dir).context(
         "failed to open project (meta.json5 required; legacy YAML projects: run \
          `vlabel-convert migrate-yaml <project_dir>`)",
@@ -182,7 +204,7 @@ fn run_export(format: Format, project_dir: PathBuf, out_dir: PathBuf) -> Result<
     let total_boxes = items.iter().map(|item| item.annotation.objects.len()).sum::<usize>();
 
     match format {
-        Format::Yolo => export_dataset_yolo(&project, &items, &meta, &out_dir)?,
+        Format::Yolo => export_dataset_yolo(&project, &items, &meta, &out_dir, &options)?,
         Format::Voc => export_dataset_voc(&project, &items, &meta, &out_dir)?,
         Format::Coco => export_dataset_coco(&project, &items, &meta, &out_dir)?,
         Format::LabelMe => export_dataset_labelme(&project, &items, &meta, &out_dir)?,
