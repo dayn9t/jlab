@@ -283,7 +283,7 @@ pub fn merge_imported_images(
     duplicate_template: &str,
 ) -> anyhow::Result<()> {
     // Annotations are keyed by stem: b.png vs existing b.jpg would silently
-    // overwrite the same labels/b.yaml, so the duplicate check is stem-based.
+    // overwrite the same vlabels/b.json5, so the duplicate check is stem-based.
     let existing_stems = project_image_stems(project)?;
     let mut incoming_stems = HashSet::new();
     for item in &imported {

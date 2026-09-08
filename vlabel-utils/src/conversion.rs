@@ -685,7 +685,7 @@ mod tests {
         let root = temp_dir(tag);
         fs::create_dir_all(root.join("images")).unwrap();
         fs::create_dir_all(root.join("vlabels")).unwrap();
-        save_meta(root.join("meta.yaml"), &test_meta()).unwrap();
+        save_meta(root.join("meta.json5"), &test_meta()).unwrap();
         image::RgbImage::from_pixel(4, 2, image::Rgb([0, 0, 0]))
             .save(root.join("images/p.png"))
             .unwrap();
@@ -779,7 +779,7 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("images")).unwrap();
         fs::create_dir_all(root.join("vlabels")).unwrap();
-        save_meta(root.join("meta.yaml"), &test_meta()).unwrap();
+        save_meta(root.join("meta.json5"), &test_meta()).unwrap();
         // real 4x2 png so image::open works
         image::RgbImage::from_pixel(4, 2, image::Rgb([0, 0, 0]))
             .save(root.join("images/p.png"))

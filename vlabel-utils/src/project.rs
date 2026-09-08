@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use vlabel_core::{Error, Label, LabelMeta, Result};
 
 /// Extract the file stem used to key annotation files (labels are keyed by stem,
-/// so a.jpg and a.png share the same labels/a.yaml).
+/// so a.jpg and a.png share the same vlabels/a.json5).
 fn file_stem(file_name: &str) -> &str {
     Path::new(file_name).file_stem().and_then(|s| s.to_str()).unwrap_or(file_name)
 }
@@ -21,7 +21,7 @@ impl Project {
     /// Open an existing project from a root directory
     pub fn open<P: AsRef<Path>>(root: P) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
-        let meta_path = root.join("meta.yaml");
+        let meta_path = root.join("meta.json5");
 
         let meta = vlabel_core::io::load_meta(&meta_path)?;
 
@@ -40,7 +40,7 @@ impl Project {
 
     /// Get the path to a specific annotation file
     pub fn annotation_path(&self, image_name: &str) -> PathBuf {
-        self.vlabels_dir().join(format!("{}.yaml", file_stem(image_name)))
+        self.vlabels_dir().join(format!("{}.json5", file_stem(image_name)))
     }
 
     /// Load an annotation for a specific image
@@ -309,7 +309,7 @@ mod tests {
     fn make_project(tag: &str) -> (PathBuf, Project) {
         let root = temp_root(tag);
         let meta = crate::import::tests::test_meta();
-        vlabel_core::io::save_meta(root.join("meta.yaml"), &meta).unwrap();
+        vlabel_core::io::save_meta(root.join("meta.json5"), &meta).unwrap();
         let project = Project::open(&root).unwrap();
         (root, project)
     }

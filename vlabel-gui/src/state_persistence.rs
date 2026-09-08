@@ -226,7 +226,7 @@ mod tests {
         Polygon::from(vec![Point { x, y: 0.1 }, Point { x: x + 0.1, y: 0.2 }, Point { x, y: 0.3 }])
     }
 
-    /// Create a temp project (meta.yaml + optionally one real PNG) usable by
+    /// Create a temp project (meta.json5 + optionally one real PNG) usable by
     /// load_project. `image_name: None` creates a project with empty images/.
     fn temp_project(tag: &str, image_name: Option<&str>) -> PathBuf {
         let root =
@@ -255,7 +255,7 @@ mod tests {
             property_types: vec![],
             property_special_values: vec![],
         };
-        vlabel_core::io::save_meta(root.join("meta.yaml"), &meta).unwrap();
+        vlabel_core::io::save_meta(root.join("meta.json5"), &meta).unwrap();
         if let Some(image_name) = image_name {
             image::RgbaImage::from_pixel(4, 4, image::Rgba([8, 8, 8, 255]))
                 .save(root.join("images").join(image_name))
@@ -319,7 +319,7 @@ mod tests {
         state.clipboard_rois = vec![poly(0.7)];
         state.clipboard_objects = vec![vlabel_core::new_object(0, 0, poly(0.2))];
 
-        // Directory without meta.yaml: Project::open fails, the user stays in
+        // Directory without meta.json5: Project::open fails, the user stays in
         // the previously opened project.
         let bad = temp_project("f7-bad", None).join("no-meta");
         fs::create_dir_all(&bad).unwrap();
@@ -342,7 +342,7 @@ mod tests {
         state.selected_object_id = Some(3);
         state.has_unsaved_changes = true;
 
-        // Project B has meta.yaml but an empty images/ dir: nothing from
+        // Project B has meta.json5 but an empty images/ dir: nothing from
         // project A's loaded sample may survive the switch.
         state.load_project(temp_project("f8b", None)).unwrap();
 
@@ -377,7 +377,7 @@ mod tests {
         assert!(!state.has_unsaved_changes);
         // A later auto-save must not resurrect the deleted sample's annotation.
         state.save_if_needed().unwrap();
-        assert!(!root.join("labels/a.yaml").exists());
+        assert!(!root.join("vlabels/a.json5").exists());
         let _ = fs::remove_dir_all(&home);
         let _ = fs::remove_dir_all(&root);
     }

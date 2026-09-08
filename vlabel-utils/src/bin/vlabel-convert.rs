@@ -38,7 +38,7 @@ enum Command {
         /// Images directory (required when --format coco)
         #[arg(long)]
         images: Option<PathBuf>,
-        /// Target VLabel project directory (must contain meta.yaml)
+        /// Target VLabel project directory (must contain meta.json5)
         project: PathBuf,
     },
     /// Export a VLabel project to an external dataset
