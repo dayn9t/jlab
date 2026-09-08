@@ -6,7 +6,7 @@
 //!   vlabel-convert export --format <yolo|voc|coco|labelme> [--no-mask] [--symlink]
 //!       <project_dir> <out_dir>  (yolo-only image options)
 //!   vlabel-convert migrate-yaml [--global] <project_dir>
-//!   vlabel-convert verify-roundtrip [--iou-tolerance 0.001] [--report <file.jsonl>] <yolo_src>
+//!   vlabel-convert verify-roundtrip [--iou-tolerance 0.01] [--report <file.jsonl>] <yolo_src>
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -83,8 +83,10 @@ enum Command {
     VerifyRoundtrip {
         /// YOLO source root (images/ + labels/; classes.txt optional)
         src: PathBuf,
-        /// Boxes match when classes are equal and IoU >= 1 - tolerance
-        #[arg(long, default_value_t = 0.001)]
+        /// Boxes match when classes are equal and IoU >= 1 - tolerance.
+        ///     Default 0.01 (IoU >= 0.99) absorbs 6-decimal quantization
+        ///     noise on tiny boxes; pass 0.001 for strict IoU >= 0.999.
+        #[arg(long, default_value_t = vlabel_utils::roundtrip::DEFAULT_IOU_TOLERANCE)]
         iou_tolerance: f32,
         /// Write one JSON line per difference to this file
         #[arg(long)]

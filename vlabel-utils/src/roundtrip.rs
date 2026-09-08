@@ -25,6 +25,21 @@ struct YoloBox {
     coords: [f32; 4],
 }
 
+/// Default IoU tolerance: boxes match when IoU >= 0.99.
+///
+/// Tiny boxes cannot round-trip through 6-decimal normalized coordinates at
+/// the 0.999 strictness level — sub-pixel dimensions make one unit in the 6th
+/// decimal a ~0.1% size error, so the same box lands at IoU 0.99x purely from
+/// quantization (observed as 3 false missing+extra pairs in 17,491 boxes).
+/// 0.99 absorbs that noise and matches the purge_review reconciliation bar.
+/// Strict users pass `--iou-tolerance 0.001` (IoU >= 0.999) explicitly.
+pub const DEFAULT_IOU_TOLERANCE: f32 = 0.01;
+
+/// Diffs involving a box of normalized area below this are flagged `tiny`:
+/// quantization noise dominates at this size, so the diff is more likely
+/// benign round-trip noise than real corruption (0.002 ≈ 28×28 px at 640).
+const TINY_AREA: f32 = 0.002;
+
 /// Summary of a round-trip reconciliation.
 #[derive(Debug, Clone, Default)]
 pub struct RoundtripReport {
@@ -61,6 +76,18 @@ pub struct DiffEntry {
     /// IoU of a below-tolerance near miss (diagnostic), otherwise absent.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub best_iou: Option<f32>,
+    /// The diff involves a tiny box (normalized area < `TINY_AREA`): likely
+    /// quantization noise — check by hand before treating as data loss.
+    #[serde(skip_serializing_if = "is_false")]
+    pub tiny: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
+fn is_tiny(coords: &[f32; 4]) -> bool {
+    coords[2] * coords[3] < TINY_AREA
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -190,6 +217,7 @@ fn reconcile(
                 src: None,
                 out: None,
                 best_iou: None,
+                tiny: false,
             });
         }
         reconcile_frame(stem, src_boxes, out_boxes, min_iou, &mut report);
@@ -241,6 +269,7 @@ fn reconcile_frame(
                 src: Some(s.coords),
                 out: None,
                 best_iou: best_iou_for(s, out_boxes),
+                tiny: is_tiny(&s.coords),
             });
         }
     }
@@ -254,6 +283,7 @@ fn reconcile_frame(
                 src: None,
                 out: Some(o.coords),
                 best_iou: None,
+                tiny: is_tiny(&o.coords),
             });
         }
     }
@@ -445,6 +475,40 @@ mod tests {
     }
 
     #[test]
+    fn reconcile_tiny_box_quantization_noise_passes_default_tolerance() {
+        // R6: a sub-pixel box exported at 6 decimals round-trips to IoU ~0.998
+        // — the same box, but the 0.001 strict tolerance reports it as a
+        // missing+extra pair. The 0.99 default must absorb that noise.
+        let src = labels(&[("a", vec![box_(0, [0.4000005, 0.6000005, 0.001, 0.001])])]);
+        let out = labels(&[("a", vec![box_(0, [0.400001, 0.600001, 0.001, 0.001])])]);
+
+        let strict = reconcile(&["a".to_string()], &src, &out, 0.001);
+
+        assert!(!strict.is_pass(), "strict 0.999 sees quantization noise as loss");
+        assert_eq!(strict.missing, 1);
+        assert_eq!(strict.extra, 1);
+        assert!(strict.diffs.iter().all(|d| d.tiny), "tiny-box diff flagged for review");
+
+        let default = reconcile(&["a".to_string()], &src, &out, DEFAULT_IOU_TOLERANCE);
+
+        assert!(default.is_pass());
+        assert_eq!(default.matched, 1);
+        assert!(default.diffs.is_empty());
+    }
+
+    #[test]
+    fn reconcile_diff_on_normal_size_box_not_flagged_tiny() {
+        let src = labels(&[("a", vec![box_(0, [0.3, 0.3, 0.1, 0.1])])]);
+        let out = labels(&[("a", vec![box_(0, [0.7, 0.7, 0.1, 0.1])])]);
+
+        let report = reconcile(&["a".to_string()], &src, &out, DEFAULT_IOU_TOLERANCE);
+
+        assert_eq!(report.missing, 1);
+        assert_eq!(report.extra, 1);
+        assert!(report.diffs.iter().all(|d| !d.tiny), "0.01-area box is not tiny");
+    }
+
+    #[test]
     fn reconcile_missing_and_extra_boxes() {
         let src =
             labels(&[("a", vec![box_(0, [0.3, 0.3, 0.1, 0.1]), box_(1, [0.7, 0.7, 0.1, 0.1])])]);
@@ -546,6 +610,47 @@ mod tests {
         assert_eq!(report.boxes_src, 2);
         assert_eq!(report.matched, 2);
         assert!(report.max_delta <= 1e-3, "max delta {}", report.max_delta);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn verify_yolo_roundtrip_tiny_box_passes_default_tolerance() {
+        // R6 end-to-end: a full-precision source label of a sub-pixel box
+        // (w = h = 0.001, ~0.64 px at 640) re-exports at 6 decimals with
+        // IoU ~0.998 — between the 0.99 default bar and the 0.999 strict
+        // bar. Strict mode reports the false missing+extra pair; the default
+        // must not.
+        let root = std::env::temp_dir().join(format!("vlabel-rt-tiny-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("src/images")).unwrap();
+        fs::create_dir_all(root.join("src/labels")).unwrap();
+        image::RgbImage::from_pixel(640, 640, image::Rgb([64, 64, 64]))
+            .save(root.join("src/images/tiny.jpg"))
+            .unwrap();
+        fs::write(root.join("src/labels/tiny.txt"), "0 0.4000005 0.6000005 0.001 0.001\n").unwrap();
+        fs::write(root.join("src/classes.txt"), "person\n").unwrap();
+
+        let strict = verify_yolo_roundtrip(&root.join("src"), 0.001, None).unwrap();
+
+        assert!(!strict.is_pass(), "strict mode reproduces the R6 false positive");
+        assert_eq!(strict.missing, 1);
+        assert_eq!(strict.extra, 1);
+        assert!(strict.diffs.iter().all(|d| d.tiny), "diff entries carry the tiny flag");
+        let near_miss = strict
+            .diffs
+            .iter()
+            .find(|d| matches!(d.kind, DiffKind::MissingBox))
+            .expect("missing-box entry");
+        let iou = near_miss.best_iou.expect("near miss carries diagnostic IoU");
+        assert!(
+            (0.99..0.999).contains(&iou),
+            "round-trip IoU {iou} sits in the quantization-noise band"
+        );
+
+        let report = verify_yolo_roundtrip(&root.join("src"), DEFAULT_IOU_TOLERANCE, None).unwrap();
+
+        assert!(report.is_pass(), "diffs: {:?}", report.diffs);
+        assert_eq!(report.matched, 1);
         let _ = fs::remove_dir_all(&root);
     }
 

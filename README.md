@@ -40,7 +40,8 @@ cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format yolo
 cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format coco <project_dir> <out_dir>
 
 # round-trip 对账：import → export（no-mask）→ 与源逐框比对（IoU 容差），差异可落 jsonl
-cargo run --release -p vlabel-utils --bin vlabel-convert -- verify-roundtrip [--iou-tolerance 0.001] [--report diffs.jsonl] <yolo_src_root>
+# --iou-tolerance 默认 0.01（IoU≥0.99，与 purge_review 对账口径一致；微小框 6 位小数量化噪声在此容差内吸收，严格 0.999 需显式传 0.001）
+cargo run --release -p vlabel-utils --bin vlabel-convert -- verify-roundtrip [--iou-tolerance 0.01] [--report diffs.jsonl] <yolo_src_root>
 ```
 
 `--roi` 规则文件（JSON5，key = 文件名 stem 前缀，坐标归一化 [0,1]）：
