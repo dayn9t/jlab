@@ -1,4 +1,5 @@
 pub mod conversion;
+pub mod dataset_export;
 pub mod import;
 pub mod mask;
 pub mod migrate;

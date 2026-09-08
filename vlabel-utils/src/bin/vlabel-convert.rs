@@ -12,9 +12,10 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use vlabel_utils::conversion::{
-    collect_export_items, ensure_safe_export_dir, export_dataset_coco, export_dataset_labelme,
-    export_dataset_voc, export_dataset_yolo, YoloExportOptions,
+use vlabel_utils::conversion::{collect_export_items, ensure_safe_export_dir};
+use vlabel_utils::dataset_export::{
+    export_dataset_coco, export_dataset_labelme, export_dataset_voc, export_dataset_yolo,
+    YoloExportOptions,
 };
 use vlabel_utils::import::{
     import_from_coco, import_from_labelme, import_from_voc, import_from_yolo,

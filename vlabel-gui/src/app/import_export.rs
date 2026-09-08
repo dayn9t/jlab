@@ -1,9 +1,10 @@
 use super::LabApp;
 use anyhow::Context;
 use std::collections::HashSet;
-use vlabel_utils::conversion::{
-    collect_export_items, ensure_safe_export_dir, export_dataset_coco, export_dataset_labelme,
-    export_dataset_voc, export_dataset_yolo, YoloExportOptions,
+use vlabel_utils::conversion::{collect_export_items, ensure_safe_export_dir};
+use vlabel_utils::dataset_export::{
+    export_dataset_coco, export_dataset_labelme, export_dataset_voc, export_dataset_yolo,
+    YoloExportOptions,
 };
 
 #[derive(Debug, Clone, Copy)]

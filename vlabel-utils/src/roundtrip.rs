@@ -7,7 +7,8 @@
 //! 结构：`reconcile` 是纯函数（functional core，直接单测）；
 //! `verify_yolo_roundtrip` 是带 IO 的外壳。
 
-use crate::conversion::{link_or_copy, YoloExportOptions};
+use crate::conversion::collect_export_items;
+use crate::dataset_export::{export_dataset_yolo, link_or_copy, YoloExportOptions};
 use crate::import::{import_from_yolo, list_images_in_dir};
 use crate::Project;
 use anyhow::Context;
@@ -145,8 +146,8 @@ fn run_roundtrip(
 
     // -- export (no-mask: coordinate fidelity only) --
     let out_dir = temp_project.join("export");
-    let items = crate::conversion::collect_export_items(&project)?;
-    crate::conversion::export_dataset_yolo(
+    let items = collect_export_items(&project)?;
+    export_dataset_yolo(
         &project,
         &items,
         &meta,
