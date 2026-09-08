@@ -47,32 +47,20 @@ fn migrate_one<T: Serialize + DeserializeOwned>(src: &Path) -> Result<()> {
 }
 
 /// 非类型化迁移单文件（shortcuts 专用，类型在 vlabel-gui 不可达）。
+/// serde_json::Value 实现 Serialize + DeserializeOwned，直接复用 migrate_one。
 fn migrate_untyped(src: &Path) -> Result<()> {
-    let dst = src.with_extension("json5");
-    if dst.exists() {
-        bail!("target already exists, refusing to overwrite: {}", dst.display());
-    }
-    let content =
-        fs::read_to_string(src).with_context(|| format!("failed to read {}", src.display()))?;
-    let value: serde_json::Value = serde_yaml::from_str(&content)
-        .with_context(|| format!("failed to parse YAML {}", src.display()))?;
-    fs::write(&dst, json5::to_string(&value)?)?;
-    let _verify: serde_json::Value = json5::from_str(&fs::read_to_string(&dst)?)
-        .with_context(|| format!("verification failed for {}", dst.display()))?;
-    fs::remove_file(src).with_context(|| format!("failed to remove {}", src.display()))?;
-    Ok(())
+    migrate_one::<serde_json::Value>(src)
 }
 
 /// 迁移项目目录下所有旧 YAML 文件；`global_shortcuts` 为 --global 传入的
 /// 全局快捷键旧配置路径。无可迁移文件时报错（不静默成功）。
+///
+/// meta 在项目内文件中最后迁移：labels/shortcuts 任一失败时 meta.yaml 仍在、
+/// meta.json5 不存在，Project::open 直接失败——半迁移项目无法被 GUI 打开编辑
+/// （防止自动保存的 .json5 遮蔽残留 .yaml）；已成功文件的 .yaml 已删，
+/// 修复故障源后重跑即可续迁，不触发「目标已存在」守卫。
 pub fn migrate_project(root: &Path, global_shortcuts: Option<&Path>) -> Result<MigrateReport> {
     let mut report = MigrateReport::default();
-
-    let meta_path = root.join("meta.yaml");
-    if meta_path.exists() {
-        migrate_one::<vlabel_core::LabelMeta>(&meta_path)?;
-        report.meta += 1;
-    }
 
     let vlabels_dir = root.join("vlabels");
     if vlabels_dir.is_dir() {
@@ -91,6 +79,12 @@ pub fn migrate_project(root: &Path, global_shortcuts: Option<&Path>) -> Result<M
     if project_shortcuts.exists() {
         migrate_untyped(&project_shortcuts)?;
         report.shortcuts += 1;
+    }
+
+    let meta_path = root.join("meta.yaml");
+    if meta_path.exists() {
+        migrate_one::<vlabel_core::LabelMeta>(&meta_path)?;
+        report.meta += 1;
     }
 
     if let Some(global) = global_shortcuts {
@@ -192,6 +186,39 @@ mod tests {
 
         // 旧文件未被删除（fail-fast，无半迁移状态）
         assert!(root.join("meta.yaml").exists());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_migrate_failure_keeps_project_closed() {
+        let root = std::env::temp_dir().join("vlabel_migrate_partial_test");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("vlabels")).unwrap();
+        fs::write(root.join("meta.yaml"), serde_yaml::to_string(&test_meta()).unwrap()).unwrap();
+        fs::write(
+            root.join("vlabels/0001.yaml"),
+            serde_yaml::to_string(&new_label("0001.jpg")).unwrap(),
+        )
+        .unwrap();
+        // 语法非法的残留文件：第二个 label 解析失败，迁移中途 abort
+        fs::write(root.join("vlabels/0002.yaml"), "objects: [unclosed\n").unwrap();
+
+        let err = migrate_project(&root, None).unwrap_err();
+        assert!(err.to_string().contains("0002.yaml"));
+
+        // 半迁移态不可打开：meta.yaml 仍在、meta.json5 不存在，Project::open 失败
+        assert!(root.join("meta.yaml").exists());
+        assert!(!root.join("meta.json5").exists());
+
+        // 修复故障源后重跑续迁成功（已迁移的 0001 不触发「目标已存在」守卫）
+        fs::write(
+            root.join("vlabels/0002.yaml"),
+            serde_yaml::to_string(&new_label("0002.jpg")).unwrap(),
+        )
+        .unwrap();
+        let report = migrate_project(&root, None).unwrap();
+        assert_eq!(report, MigrateReport { meta: 1, labels: 1, shortcuts: 0 });
 
         let _ = fs::remove_dir_all(&root);
     }
