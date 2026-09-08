@@ -16,7 +16,6 @@ repository = "https://github.com/dayn9t/vlabel"
 [workspace.dependencies]
 # Common dependencies can be defined here and referenced by workspace members
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
 json5 = "1"
 serde_json = "1.0"
 thiserror = "1.0"
