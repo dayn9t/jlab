@@ -5,6 +5,8 @@
 > `vlabel-core`）；**Python 格式（jxl `A2dImageLabel`）废弃**，仅保留少量候选内容
 > 按需提取补充到 Rust 格式（见 §7）。
 
+> 2026-09-08 注：磁盘格式已由 YAML 迁至 JSON5（见 specs/2026-09-08-yaml-to-json5-design.md），本文其余 YAML 表述为历史记录。
+
 ## 1. 两代格式身份
 
 | 维度 | Rust（现行，VLabel） | Python（退役，jxl） |

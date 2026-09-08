@@ -5,7 +5,7 @@
 ## 关键文件
 
 - conversion.rs: 坐标格式转换（归一化 ↔ 像素）
-- project.rs: 标注项目管理（meta.yaml 读写）
+- project.rs: 标注项目管理（meta.json5 读写）
 - validation.rs: 数据验证
 
 ## 测试

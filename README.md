@@ -40,9 +40,9 @@ cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format coco
 
 ```
 label_root/
-├── meta.yaml    # 项目配置（类别、属性）
+├── meta.json5   # 项目配置（类别、属性）
 ├── images/      # 图像文件
-└── labels/      # 标注文件
+└── vlabels/     # 标注文件
 ```
 
 ## 快捷键
@@ -96,7 +96,7 @@ label_root/
 - `ui_settings.json` - 字体、缩放、滚动条等外观设置
 - `theme.json` - 主题设置
 - `auto_save.json` - 自动保存设置
-- `shortcuts.yaml` - 快捷键配置
+- `shortcuts.json5` - 快捷键配置
 
 ## 许可证
 

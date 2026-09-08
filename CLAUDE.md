@@ -6,10 +6,10 @@ Rust workspace (3 crates): vlabel-core（标注数据模型 + 导出）、vlabel
 
 | 术语 | 含义 | 非此含义 |
 |------|------|---------|
-| Annotation | 多边形标注数据（点集 + 类别 + 属性），存储为 YAML | ≠ Label（标签文本） |
+| Annotation | 多边形标注数据（点集 + 类别 + 属性），存储为 JSON5 | ≠ Label（标签文本） |
 | ROI | Region of Interest，感兴趣区域标注 | ≠ 普通目标标注 |
 | Mode | 编辑模式（Normal / Editing），决定画布行为 | ≠ 编辑器模式 |
-| Project | 标注项目 = meta.yaml + images/ + vlabels/ | ≠ Cargo 项目 |
+| Project | 标注项目 = meta.json5 + images/ + vlabels/ | ≠ Cargo 项目 |
 | Export | 将标注导出为 YOLO / VOC / COCO 格式 | ≠ 序列化 |
 
 ## 构建 & 测试
