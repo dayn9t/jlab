@@ -114,8 +114,10 @@ fn run_import(
     images: Option<PathBuf>,
     project_dir: PathBuf,
 ) -> Result<()> {
-    let project =
-        Project::open(&project_dir).context("failed to open project (meta.yaml required)")?;
+    let project = Project::open(&project_dir).context(
+        "failed to open project (meta.json5 required; legacy YAML projects: run \
+         `vlabel-convert migrate-yaml <project_dir>`)",
+    )?;
     let meta = project.meta.clone();
     let existing_names = project
         .list_images()?
@@ -142,8 +144,10 @@ fn run_import(
 }
 
 fn run_export(format: Format, project_dir: PathBuf, out_dir: PathBuf) -> Result<()> {
-    let project =
-        Project::open(&project_dir).context("failed to open project (meta.yaml required)")?;
+    let project = Project::open(&project_dir).context(
+        "failed to open project (meta.json5 required; legacy YAML projects: run \
+         `vlabel-convert migrate-yaml <project_dir>`)",
+    )?;
     // Fail fast before reading any image when the output dir would overwrite
     // the project itself (the per-format drivers re-check before writing).
     ensure_safe_export_dir(&project.root, &out_dir)?;
