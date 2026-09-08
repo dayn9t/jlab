@@ -32,8 +32,24 @@ cargo run --release -p vlabel-gui -- /path/to/project
 ### 格式转换 CLI（非交互）
 
 ```bash
-cargo run --release -p vlabel-utils --bin vlabel-convert -- import --format yolo <src_root> <project_dir>
+# 导入（YOLO 源 = images/ + labels/）；--roi 按 stem 前缀批量注入 ROI
+cargo run --release -p vlabel-utils --bin vlabel-convert -- import --format yolo [--roi roi.json5] <src_root> <project_dir>
+
+# 导出；--no-mask / --symlink 仅 yolo 生效
+cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format yolo [--no-mask] [--symlink] <project_dir> <out_dir>
 cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format coco <project_dir> <out_dir>
+
+# round-trip 对账：import → export（no-mask）→ 与源逐框比对（IoU 容差），差异可落 jsonl
+cargo run --release -p vlabel-utils --bin vlabel-convert -- verify-roundtrip [--iou-tolerance 0.001] [--report diffs.jsonl] <yolo_src_root>
+```
+
+`--roi` 规则文件（JSON5，key = 文件名 stem 前缀，坐标归一化 [0,1]）：
+
+```json5
+{
+  "1": [[[0, 0.0012], [1, 0.0012], [1, 0.745], [0, 0.838]]],  // cam1 四边形 ROI
+  "2": [[[0, 0], [1, 0], [1, 1], [0, 1]]],                     // cam2 全图
+}
 ```
 
 ## 项目结构
