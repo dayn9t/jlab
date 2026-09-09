@@ -86,12 +86,12 @@ pub fn export_dataset_image_folder(
 
     // Pass 1: plan every crop (and fail on schema drift) before writing.
     let mut skipped = 0usize;
-    let mut plan: Vec<(usize, &Object, &str, (u32, u32, u32, u32))> = Vec::new();
+    let mut plan: Vec<PlannedCrop> = Vec::new();
     for (item_index, item) in items.iter().enumerate() {
         for obj in &item.annotation.objects {
             let dir = class_dir_for(obj, prop, meta, &value_dirs, &item.file_name)?;
             match crop_rect(&obj.polygon, item.width, item.height, options.crop_margin) {
-                Some(rect) => plan.push((item_index, obj, dir, rect)),
+                Some(rect) => plan.push(PlannedCrop { item_index, obj, dir, rect }),
                 None => {
                     // Visible, not silent (import skipped-row precedent): the
                     // object has no croppable region.
@@ -112,7 +112,7 @@ pub fn export_dataset_image_folder(
     let mut unlabeled = 0usize;
     let mut current_item = usize::MAX;
     let mut img: Option<image::DynamicImage> = None;
-    for (item_index, obj, dir, (x, y, w, h)) in &plan {
+    for PlannedCrop { item_index, obj, dir, rect: (x, y, w, h) } in &plan {
         if *item_index != current_item {
             let item = &items[*item_index];
             img = Some(
@@ -146,6 +146,14 @@ pub fn export_dataset_image_folder(
         unlabeled,
         skipped,
     })
+}
+
+/// A crop resolved by pass 1: source item, object, class dir, pixel rect.
+struct PlannedCrop<'a> {
+    item_index: usize,
+    obj: &'a Object,
+    dir: &'a str,
+    rect: (u32, u32, u32, u32),
 }
 
 /// Resolve an object's class dir: the sanitized value name for a normal

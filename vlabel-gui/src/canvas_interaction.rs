@@ -65,7 +65,7 @@ impl Canvas {
             let rois: Vec<vlabel_core::Polygon<f32>> =
                 label.map(|l| l.rois.clone()).unwrap_or_default();
             let texture_key = format!("{:?}|{:?}", image_data.path, rois);
-            if self.texture_cache.as_ref().map_or(true, |(k, _)| *k != texture_key) {
+            if self.texture_cache.as_ref().is_none_or(|(k, _)| *k != texture_key) {
                 let mut pixels = image_data.pixels.clone();
                 crate::roi_film::apply_roi_film(
                     &mut pixels,
