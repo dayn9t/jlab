@@ -140,14 +140,17 @@ impl LabApp {
                             ui.label(format!("{}:", self.state.i18n.t("sidebar.category")));
                             egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
                                 for category in &meta.categories {
-                                    let hotkey_suffix = category
+                                    // Hotkey digit goes in front ("1.垃圾桶"),
+                                    // not as a "(1)" suffix: a trailing
+                                    // parenthesized number reads like a count.
+                                    let hotkey_prefix = category
                                         .hotkey
                                         .parse::<u32>()
                                         .ok()
                                         .filter(|d| (1..=9).contains(d))
-                                        .map(|d| format!(" ({})", d))
+                                        .map(|d| format!("{}.", d))
                                         .unwrap_or_default();
-                                    let item_text = format!("{}{}", category.name, hotkey_suffix);
+                                    let item_text = format!("{}{}", hotkey_prefix, category.name);
                                     if ui
                                         .selectable_label(obj.category == category.id, item_text)
                                         .clicked()
