@@ -612,7 +612,7 @@ impl LabApp {
                             self.finish_drawing();
                         }
                         let _ = self.state.prev_image();
-                        self.canvas.reset_view();
+                        self.canvas.reset_pan();
                         ui.close_menu();
                     }
 
@@ -631,7 +631,7 @@ impl LabApp {
                             self.finish_drawing();
                         }
                         let _ = self.state.next_image();
-                        self.canvas.reset_view();
+                        self.canvas.reset_pan();
                         ui.close_menu();
                     }
 
@@ -652,7 +652,7 @@ impl LabApp {
                             self.finish_drawing();
                         }
                         let _ = self.state.jump_backward(10);
-                        self.canvas.reset_view();
+                        self.canvas.reset_pan();
                         ui.close_menu();
                     }
 
@@ -671,7 +671,7 @@ impl LabApp {
                             self.finish_drawing();
                         }
                         let _ = self.state.jump_forward(10);
-                        self.canvas.reset_view();
+                        self.canvas.reset_pan();
                         ui.close_menu();
                     }
 

@@ -58,6 +58,15 @@ impl Canvas {
         self.pan_offset = Vec2::ZERO;
     }
 
+    /// Re-center the pan while keeping the zoom level: image navigation
+    /// (prev/next/jump) keeps the zoom the annotator dialed in, so a
+    /// frame sequence is inspected at a constant magnification. Only
+    /// loading a different project (or an explicit zoom reset) calls
+    /// `reset_view`.
+    pub fn reset_pan(&mut self) {
+        self.pan_offset = Vec2::ZERO;
+    }
+
     /// Set zoom level
     pub fn set_zoom(&mut self, zoom: f32) {
         self.zoom = zoom.clamp(0.1, 10.0);
@@ -426,4 +435,33 @@ fn parse_color(color_str: &str) -> Option<Color32> {
     let b = u8::from_str_radix(&color_str[5..7], 16).ok()?;
 
     Some(Color32::from_rgb(r, g, b))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reset_pan_keeps_zoom_but_recenters() {
+        let mut canvas = Canvas::new();
+        canvas.set_zoom(2.5);
+        canvas.pan_offset = Vec2::new(120.0, -40.0);
+
+        canvas.reset_pan();
+
+        assert_eq!(canvas.pan_offset, Vec2::ZERO, "pan must re-center");
+        assert!((canvas.zoom - 2.5).abs() < f32::EPSILON, "zoom must survive navigation");
+    }
+
+    #[test]
+    fn reset_view_clears_both() {
+        let mut canvas = Canvas::new();
+        canvas.set_zoom(2.5);
+        canvas.pan_offset = Vec2::new(120.0, -40.0);
+
+        canvas.reset_view();
+
+        assert_eq!(canvas.pan_offset, Vec2::ZERO);
+        assert_eq!(canvas.zoom, 1.0);
+    }
 }

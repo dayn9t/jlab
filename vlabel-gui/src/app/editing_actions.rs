@@ -151,28 +151,28 @@ impl LabApp {
                     self.finish_drawing();
                 }
                 let _ = self.state.prev_image();
-                self.canvas.reset_view();
+                self.canvas.reset_pan();
             }
             ShortcutAction::NextImage => {
                 if self.state.editing_state.mode == crate::state::EditMode::Drawing {
                     self.finish_drawing();
                 }
                 let _ = self.state.next_image();
-                self.canvas.reset_view();
+                self.canvas.reset_pan();
             }
             ShortcutAction::JumpBackward10 => {
                 if self.state.editing_state.mode == crate::state::EditMode::Drawing {
                     self.finish_drawing();
                 }
                 let _ = self.state.jump_backward(10);
-                self.canvas.reset_view();
+                self.canvas.reset_pan();
             }
             ShortcutAction::JumpForward10 => {
                 if self.state.editing_state.mode == crate::state::EditMode::Drawing {
                     self.finish_drawing();
                 }
                 let _ = self.state.jump_forward(10);
-                self.canvas.reset_view();
+                self.canvas.reset_pan();
             }
             ShortcutAction::CycleNextObject => {
                 if let Some(label) = &self.state.current_annotation {
