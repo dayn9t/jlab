@@ -1,6 +1,7 @@
 //! Dataset 级导出驱动（YOLO / VOC / COCO / LabelMe）：每个驱动写一个完整
 //! 数据集目录布局。单条标注的格式转换在 `conversion`；本模块只做布局、
 //! 图片写入策略（copy / symlink / ROI 灰化）与 classes.txt。
+//! ImageFolder 分类集导出（按属性值分目录的 crop）在 `image_folder_export`。
 
 use crate::conversion::{
     ensure_safe_export_dir, export_annotation, export_coco_batch, export_yolo_classes_txt,
@@ -59,6 +60,30 @@ pub(crate) fn link_or_copy(src: &Path, dst: &Path, link: bool) -> anyhow::Result
     }
 }
 
+/// Save `img` to `out_path`, re-encoding it: JPEG at high quality (the
+/// default encoder quality would needlessly degrade training data), any other
+/// extension via the image crate's default encoder for it.
+pub(crate) fn save_image_high_quality(
+    img: &image::DynamicImage,
+    out_path: &Path,
+) -> anyhow::Result<()> {
+    let ext = out_path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "jpg" | "jpeg" => {
+            let file = fs::File::create(out_path)?;
+            let mut writer = std::io::BufWriter::new(file);
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut writer, 95)
+                .encode_image(img)?;
+        }
+        _ => img.save(out_path)?,
+    }
+    Ok(())
+}
+
 /// Write one export image for the YOLO driver: when the annotation has ROIs
 /// and `options.mask_outside_rois`, the area outside every ROI is painted
 /// `mask::MASK_GRAY`; otherwise the image is written verbatim (linked when
@@ -85,38 +110,13 @@ pub fn export_image_yolo(
         return Ok(false);
     }
 
-    let ext = out_path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_ascii_lowercase())
-        .unwrap_or_default();
-    match ext.as_str() {
-        // Re-encode JPEG at high quality; the default encoder quality would
-        // needlessly degrade training data.
-        "jpg" | "jpeg" => {
-            let file = fs::File::create(&out_path)?;
-            let mut writer = std::io::BufWriter::new(file);
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut writer, 95)
-                .encode_image(&masked)?;
-        }
-        _ => masked.save(&out_path)?,
-    }
+    save_image_high_quality(&masked, &out_path)?;
     Ok(true)
 }
 
-// TODO(properties-export): classifier training-set export — VLabel object
-// properties → ImageFolder layout (`out/<property-value>/<stem>_<obj-id>.<ext>`).
-// Deliberately not implemented yet; design sketch:
-//   vlabel-convert export --format imagefolder --property <id> [--crop margin]
-//       [--split train:val] <project_dir> <out_dir>
-// - crop = object bbox + margin (default 0.05), written as a real re-encoded
-//   file (crop changes bytes, so --symlink never applies);
-// - folder name = property *value name* from meta (not raw id) so the dir tree
-//   is self-describing; objects missing the property land in `unlabeled/`
-//   rather than being silently dropped;
-// - frames without objects contribute nothing (a classification set has no
-//   negative-sample concept; the detection pipeline keeps that role);
-// - --split writes a deterministic (stem-hash) train/val split.
+// The former design sketch here (properties → ImageFolder classification-set
+// export) is implemented in `image_folder_export` (R5). Still open from the
+// sketch: a `--split train:val` deterministic (stem-hash) split.
 
 /// YOLO dataset export driver: writes `<out_dir>/images`, `<out_dir>/labels`
 /// (one `<stem>.txt` per image with raw category ids) and `<out_dir>/classes.txt`.

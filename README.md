@@ -39,6 +39,10 @@ cargo run --release -p vlabel-utils --bin vlabel-convert -- import --format yolo
 cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format yolo [--no-mask] [--symlink] <project_dir> <out_dir>
 cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format coco <project_dir> <out_dir>
 
+# 分类集导出（ImageFolder）：按属性值分目录的 object crop，属性名取自 meta.json5 property_types
+# 属性缺失/特殊值（uncertain，如 occluded）的 object 落入 unlabeled/；--crop 为 bbox 外扩边距（bbox 长边比例，默认 0.05）
+cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format image-folder --property <name> [--crop 0.05] <project_dir> <out_dir>
+
 # round-trip 对账：import → export（no-mask）→ 与源逐框比对（IoU 容差），差异可落 jsonl
 # --iou-tolerance 默认 0.01（IoU≥0.99，与 purge_review 对账口径一致；微小框 6 位小数量化噪声在此容差内吸收，严格 0.999 需显式传 0.001）
 cargo run --release -p vlabel-utils --bin vlabel-convert -- verify-roundtrip [--iou-tolerance 0.01] [--report diffs.jsonl] <yolo_src_root>

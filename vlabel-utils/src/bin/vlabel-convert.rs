@@ -1,10 +1,12 @@
 //! Non-interactive annotation format converter for VLabel projects.
 //!
 //! Usage:
-//!   vlabel-convert import --format <yolo|voc|coco|labelme> [--roi <file>] <src> <project_dir>
+//!   vlabel-convert import --format <yolo|voc|coco|label-me> [--roi <file>] <src> <project_dir>
 //!       (coco: <src> is the annotation json; `--images <dir>` is required)
-//!   vlabel-convert export --format <yolo|voc|coco|labelme> [--no-mask] [--symlink]
+//!   vlabel-convert export --format <yolo|voc|coco|label-me> [--no-mask] [--symlink]
 //!       <project_dir> <out_dir>  (yolo-only image options)
+//!   vlabel-convert export --format image-folder --property <name> [--crop <margin>]
+//!       <project_dir> <out_dir>  (classification set: crops per property value)
 //!   vlabel-convert migrate-yaml [--global] <project_dir>
 //!   vlabel-convert verify-roundtrip [--iou-tolerance 0.01] [--report <file.jsonl>] <yolo_src>
 
@@ -16,6 +18,9 @@ use vlabel_utils::conversion::{collect_export_items, ensure_safe_export_dir};
 use vlabel_utils::dataset_export::{
     export_dataset_coco, export_dataset_labelme, export_dataset_voc, export_dataset_yolo,
     YoloExportOptions,
+};
+use vlabel_utils::image_folder_export::{
+    export_dataset_image_folder, ImageFolderExportOptions, DEFAULT_CROP_MARGIN,
 };
 use vlabel_utils::import::{
     import_from_coco, import_from_labelme, import_from_voc, import_from_yolo,
@@ -64,6 +69,14 @@ enum Command {
         /// (masked images are still written as real files)
         #[arg(long)]
         symlink: bool,
+        /// image-folder only: property name (from meta.json5 property_types)
+        /// whose values become the class directories
+        #[arg(long, value_name = "NAME")]
+        property: Option<String>,
+        /// image-folder only: extra crop margin around each object's bbox, as
+        /// a fraction of the bbox's larger side (default 0.05)
+        #[arg(long, value_name = "MARGIN")]
+        crop: Option<f32>,
         /// VLabel project directory
         project: PathBuf,
         /// Output directory
@@ -100,6 +113,7 @@ enum Format {
     Voc,
     Coco,
     LabelMe,
+    ImageFolder,
 }
 
 fn main() {
@@ -118,8 +132,8 @@ fn run() -> Result<()> {
         Command::Import { format, src, images, roi, project } => {
             run_import(format, src, images, roi, project)
         }
-        Command::Export { format, project, out, no_mask, symlink } => {
-            run_export(format, no_mask, symlink, project, out)
+        Command::Export { format, project, out, no_mask, symlink, property, crop } => {
+            run_export(format, no_mask, symlink, property, crop, project, out)
         }
         Command::MigrateYaml { project, global } => {
             let global_path = if global {
@@ -208,6 +222,11 @@ fn run_import(
             import_from_coco(&src, &images, &meta)?
         }
         Format::LabelMe => import_from_labelme(&src, &meta)?,
+        // Classification sets have no box annotations to import back; the
+        // detection formats keep that direction.
+        Format::ImageFolder => {
+            anyhow::bail!("--format image-folder is export-only: classification sets are produced by export and cannot be imported")
+        }
     };
 
     if let Some(roi_path) = &roi {
@@ -242,6 +261,8 @@ fn run_export(
     format: Format,
     no_mask: bool,
     symlink: bool,
+    property: Option<String>,
+    crop: Option<f32>,
     project_dir: PathBuf,
     out_dir: PathBuf,
 ) -> Result<()> {
@@ -250,7 +271,22 @@ fn run_export(
     if format != Format::Yolo && (no_mask || symlink) {
         anyhow::bail!("--no-mask and --symlink only apply to --format yolo");
     }
-    let options = YoloExportOptions { mask_outside_rois: !no_mask, link_images: symlink };
+    // The classification-set options are image-folder-driver features.
+    if format != Format::ImageFolder && (property.is_some() || crop.is_some()) {
+        anyhow::bail!("--property and --crop only apply to --format image-folder");
+    }
+    let folder_options = if format == Format::ImageFolder {
+        let property =
+            property.context("--property <name> is required for --format image-folder")?;
+        let crop_margin = crop.unwrap_or(DEFAULT_CROP_MARGIN);
+        if crop_margin < 0.0 {
+            anyhow::bail!("--crop margin must be >= 0, got {crop_margin}");
+        }
+        Some(ImageFolderExportOptions { property, crop_margin })
+    } else {
+        None
+    };
+    let yolo_options = YoloExportOptions { mask_outside_rois: !no_mask, link_images: symlink };
     let project = Project::open(&project_dir).context(
         "failed to open project (meta.json5 required; legacy YAML projects: run \
          `vlabel-convert migrate-yaml <project_dir>`)",
@@ -262,11 +298,25 @@ fn run_export(
     let items = collect_export_items(&project)?;
     let total_boxes = items.iter().map(|item| item.annotation.objects.len()).sum::<usize>();
 
+    if let Some(options) = &folder_options {
+        let summary = export_dataset_image_folder(&project, &items, &meta, &out_dir, options)?;
+        println!(
+            "exported {} crop(s) -> {} ({} class dir(s), {} unlabeled, {} skipped)",
+            summary.crops,
+            out_dir.display(),
+            summary.classes,
+            summary.unlabeled,
+            summary.skipped
+        );
+        return Ok(());
+    }
+
     match format {
-        Format::Yolo => export_dataset_yolo(&project, &items, &meta, &out_dir, &options)?,
+        Format::Yolo => export_dataset_yolo(&project, &items, &meta, &out_dir, &yolo_options)?,
         Format::Voc => export_dataset_voc(&project, &items, &meta, &out_dir)?,
         Format::Coco => export_dataset_coco(&project, &items, &meta, &out_dir)?,
         Format::LabelMe => export_dataset_labelme(&project, &items, &meta, &out_dir)?,
+        Format::ImageFolder => unreachable!("handled above with folder_options"),
     }
 
     println!("exported {} labels, {total_boxes} boxes -> {}", items.len(), out_dir.display());
