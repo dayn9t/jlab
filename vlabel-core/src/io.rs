@@ -1,11 +1,23 @@
-use crate::{Label, LabelMeta, Result};
+use crate::{Error, Label, LabelMeta, Result};
 use std::fs;
 use std::path::Path;
 
 /// Load metadata from a JSON5 file
 pub fn load_meta<P: AsRef<Path>>(path: P) -> Result<LabelMeta> {
     let content = fs::read_to_string(path)?;
-    let meta: LabelMeta = json5::from_str(&content)?;
+    let meta: LabelMeta = json5::from_str(&content).map_err(|err| {
+        // Pre-bilingual meta.json5 (`name` per entity) fails with a bare
+        // "missing field `names`"; point at the one-shot migration instead
+        // of leaving the user to guess.
+        if err.to_string().contains("missing field `names`") {
+            Error::InvalidData(format!(
+                "{err} — meta.json5 predates bilingual names; run \
+                 `vlabel-convert localize-names <project_dir>` to migrate"
+            ))
+        } else {
+            Error::Json5(err)
+        }
+    })?;
     Ok(meta)
 }
 
@@ -36,6 +48,26 @@ mod tests {
     use crate::annotation::{add_object, new_label, new_object};
     use crate::{Point, Polygon};
     use std::fs;
+
+    #[test]
+    fn load_meta_pre_bilingual_error_names_the_migration() {
+        let dir = std::env::temp_dir().join("vlabel-io-oldmeta-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("meta.json5"),
+            r##"{ id: 1, name: "p", description: "", shape: { title_style: 0, thickness: 2 },
+                 roi: { color: "#0000FF" },
+                 categories: [ { id: 0, name: "trash", description: "", hotkey: "1", color: "#FF0000" } ] }"##,
+        )
+        .unwrap();
+
+        let err = load_meta(dir.join("meta.json5")).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("missing field `names`"), "message was: {msg}");
+        assert!(msg.contains("localize-names"), "must name the fix: {msg}");
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn test_save_and_load_annotation() {
