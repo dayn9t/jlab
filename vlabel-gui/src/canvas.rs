@@ -35,6 +35,10 @@ pub struct Canvas {
 
     /// Pending click for double-click detection in editing mode
     pending_click: Option<PendingClick>,
+
+    /// UI language for localized metadata names on canvas labels; synced
+    /// from `state.i18n` by the app before each `show` call.
+    pub language: crate::i18n::Language,
 }
 
 /// Double-click detection timeout in seconds
@@ -49,6 +53,7 @@ impl Canvas {
             dragging_vertex: None,
             dragging_object: None,
             pending_click: None,
+            language: crate::i18n::Language::detect_system(),
         }
     }
 
@@ -196,7 +201,7 @@ impl Canvas {
             if !obj.polygon.0.is_empty() {
                 let category_name = meta
                     .and_then(|m| vlabel_core::find_category(m, obj.category))
-                    .map(|c| c.name.as_str())
+                    .map(|c| crate::i18n::localized_name(self.language, &c.names))
                     .unwrap_or("Unknown");
 
                 let first_point = &obj.polygon.0[0];

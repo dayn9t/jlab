@@ -1,10 +1,8 @@
-//! 标注数据类型。
-//!
-//! 从 v3-types 重新导出 Label、Object、PropertyEntry，
-//! 并提供构造和操作辅助函数。
+//! 标注数据类型：Label/Object/PropertyEntry 的构造和操作辅助函数。
+//! 类型本体在 `crate::label`（2026-09 自 v3-types 搬入）。
 
+pub use crate::label::{Label, Object, PropertyEntry};
 use chrono::Local;
-pub use v3_types::label::{Label, Object, PropertyEntry};
 pub use v3_types::{Point, Polygon};
 
 /// 创建一个空的 Label。

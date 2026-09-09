@@ -46,7 +46,24 @@ cargo run --release -p vlabel-utils --bin vlabel-convert -- export --format imag
 # round-trip 对账：import → export（no-mask）→ 与源逐框比对（IoU 容差），差异可落 jsonl
 # --iou-tolerance 默认 0.01（IoU≥0.99，与 purge_review 对账口径一致；微小框 6 位小数量化噪声在此容差内吸收，严格 0.999 需显式传 0.001）
 cargo run --release -p vlabel-utils --bin vlabel-convert -- verify-roundtrip [--iou-tolerance 0.01] [--report diffs.jsonl] <yolo_src_root>
+
+# 一次性迁移：meta.json5 实体 name -> names: {en}（双语名格式）；幂等，重写会丢注释
+cargo run --release -p vlabel-utils --bin vlabel-convert -- localize-names <project_dir>
 ```
+
+### 双语元数据名（names: {en, zh}）
+
+meta.json5 中每个类别 / 属性 / 属性值 / 特殊值都使用 `names: { en, zh }`（en 与 zh 平级）：
+
+```json5
+categories: [
+  { id: 0, names: { en: "trash", zh: "垃圾桶" }, hotkey: "1", color: "#FF0000", properties: [] },
+]
+```
+
+- `en` 为**导出/互操作标识**（YOLO classes、image-folder 类目录、`--property` 参数匹配均用它），必填；
+- `zh` 为中文显示名（可选）：GUI 切到中文界面时显示 `zh`，缺失则回退显示 `en`（同时提示该条目尚未配中文名）；英文界面始终显示 `en`；
+- 顶层 `name`（项目名）不是枚举实体，保持单字段。
 
 `--roi` 规则文件（JSON5，key = 文件名 stem 前缀，坐标归一化 [0,1]）：
 

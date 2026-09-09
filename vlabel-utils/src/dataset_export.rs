@@ -267,7 +267,7 @@ pub fn export_labelme_annotation(
             continue;
         }
         let label = vlabel_core::find_category(meta, obj.category)
-            .map(|c| c.name.clone())
+            .map(|c| c.names.en.clone())
             .unwrap_or_else(|| "unknown".to_string());
         let points = obj
             .polygon

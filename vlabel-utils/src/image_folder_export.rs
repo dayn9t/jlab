@@ -38,8 +38,8 @@ pub const DEFAULT_CROP_MARGIN: f32 = 0.05;
 /// Options for the ImageFolder classification-set export driver.
 #[derive(Debug, Clone)]
 pub struct ImageFolderExportOptions {
-    /// Property name (`PropDef.name` in meta.json5 `property_types`) whose
-    /// values become the class directories.
+    /// Property name (`PropDef.names.en` in meta.json5 `property_types`)
+    /// whose values become the class directories.
     pub property: String,
     /// Extra margin around each object's bbox, as a fraction of the bbox's
     /// larger pixel side.
@@ -182,19 +182,20 @@ fn class_dir_for<'a>(
         obj.id,
         file_name,
         entry.value,
-        prop.name
+        prop.names.en
     );
 }
 
 /// Find the property definition by name; fail on unknown or ambiguous names
 /// (names are the CLI-facing key, so drift must not silently pick a wrong one).
 fn find_property_def<'a>(meta: &'a LabelMeta, name: &str) -> anyhow::Result<&'a PropDef> {
-    let matches: Vec<&PropDef> = meta.property_types.iter().filter(|p| p.name == name).collect();
+    let matches: Vec<&PropDef> =
+        meta.property_types.iter().filter(|p| p.names.en == name).collect();
     if matches.is_empty() {
         anyhow::bail!(
             "property {:?} is not defined in meta.json5 property_types (available: {:?})",
             name,
-            meta.property_types.iter().map(|p| p.name.as_str()).collect::<Vec<_>>()
+            meta.property_types.iter().map(|p| p.names.en.as_str()).collect::<Vec<_>>()
         );
     }
     if matches.len() > 1 {
@@ -229,11 +230,11 @@ fn class_dir_map(prop: &PropDef) -> anyhow::Result<BTreeMap<i32, String>> {
     let mut dirs: BTreeMap<i32, String> = BTreeMap::new();
     let mut owners: BTreeMap<String, i32> = BTreeMap::new();
     for value in &prop.values {
-        let dir = sanitize_class_dir_name(&value.name);
+        let dir = sanitize_class_dir_name(&value.names.en);
         if dir == UNLABELED_DIR {
             anyhow::bail!(
                 "value {:?} (id {}) sanitizes to the reserved directory {:?}",
-                value.name,
+                value.names.en,
                 value.id,
                 UNLABELED_DIR
             );
@@ -241,9 +242,9 @@ fn class_dir_map(prop: &PropDef) -> anyhow::Result<BTreeMap<i32, String>> {
         if let Some(prev_id) = owners.insert(dir.clone(), value.id) {
             anyhow::bail!(
                 "values {:?} (id {}) and {:?} (id {}) collide on directory {:?} after sanitizing; rename one in meta.json5",
-                prop.values.iter().find(|v| v.id == prev_id).map(|v| v.name.as_str()).unwrap_or("?"),
+                prop.values.iter().find(|v| v.id == prev_id).map(|v| v.names.en.as_str()).unwrap_or("?"),
                 prev_id,
-                value.name,
+                value.names.en,
                 value.id,
                 dir
             );
@@ -337,7 +338,7 @@ mod tests {
     fn value_def(id: i32, name: &str) -> ValueDef {
         ValueDef {
             id,
-            name: name.to_string(),
+            names: vlabel_core::LocalizedNames::en(name),
             description: String::new(),
             hotkey: String::new(),
             color: "#000000".to_string(),
@@ -349,12 +350,15 @@ mod tests {
         let mut meta = test_meta();
         meta.property_types = vec![PropDef {
             id: 3,
-            name: "wet".to_string(),
+            names: vlabel_core::LocalizedNames::en("wet"),
             description: String::new(),
             values: vec![value_def(0, "dry"), value_def(1, "wet floor")],
         }];
-        meta.property_special_values =
-            vec![SpecialValue { id: -1, name: "occluded".to_string(), ..value_def(-1, "") }];
+        meta.property_special_values = vec![SpecialValue {
+            id: -1,
+            names: vlabel_core::LocalizedNames::en("occluded"),
+            ..value_def(-1, "")
+        }];
         meta
     }
 
@@ -493,7 +497,7 @@ mod tests {
         let mut meta = project.meta.clone();
         meta.property_types.push(PropDef {
             id: 4,
-            name: "wet".to_string(),
+            names: vlabel_core::LocalizedNames::en("wet"),
             description: String::new(),
             values: vec![],
         });

@@ -6,6 +6,7 @@
 
 - conversion.rs: 坐标格式转换（归一化 ↔ 像素）
 - project.rs: 标注项目管理（meta.json5 读写）
+- meta_migrate.rs: meta.json5 双语名一次性迁移（name -> names:{en}）
 - validation.rs: 数据验证
 
 ## 测试

@@ -38,6 +38,7 @@ impl LabApp {
 
                 if let Some(label) = &self.state.current_annotation {
                     // Collect object info first to avoid borrow issues
+                    let lang = self.state.i18n.language();
                     let objects_info: Vec<_> = label
                         .objects
                         .iter()
@@ -46,7 +47,7 @@ impl LabApp {
                                 .state
                                 .get_meta()
                                 .and_then(|m| vlabel_core::find_category(m, obj.category))
-                                .map(|c| c.name.clone())
+                                .map(|c| crate::i18n::localized_name(lang, &c.names).to_string())
                                 .unwrap_or_else(|| "Unknown".to_string());
 
                             (obj.id, category_name)
@@ -138,6 +139,7 @@ impl LabApp {
                         ui.add_enabled_ui(can_edit_properties, |ui| {
                             // Category selector
                             ui.label(format!("{}:", self.state.i18n.t("sidebar.category")));
+                            let lang = self.state.i18n.language();
                             egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
                                 for category in &meta.categories {
                                     // Hotkey digit goes in front ("1.垃圾桶"),
@@ -150,7 +152,11 @@ impl LabApp {
                                         .filter(|d| (1..=9).contains(d))
                                         .map(|d| format!("{}.", d))
                                         .unwrap_or_default();
-                                    let item_text = format!("{}{}", hotkey_prefix, category.name);
+                                    let item_text = format!(
+                                        "{}{}",
+                                        hotkey_prefix,
+                                        crate::i18n::localized_name(lang, &category.names)
+                                    );
                                     if ui
                                         .selectable_label(obj.category == category.id, item_text)
                                         .clicked()
@@ -176,9 +182,15 @@ impl LabApp {
                                             if let Some(prop_type) = meta
                                                 .property_types
                                                 .iter()
-                                                .find(|pt| pt.name == prop_def.property_type)
+                                                .find(|pt| pt.names.en == prop_def.property_type)
                                             {
-                                                ui.label(format!("{}:", prop_type.name));
+                                                ui.label(format!(
+                                                    "{}:",
+                                                    crate::i18n::localized_name(
+                                                        lang,
+                                                        &prop_type.names
+                                                    )
+                                                ));
 
                                                 // Get current value
                                                 let current_value = obj
@@ -205,7 +217,10 @@ impl LabApp {
                                                     if ui
                                                         .selectable_label(
                                                             selected_value == value.id,
-                                                            &value.name,
+                                                            crate::i18n::localized_name(
+                                                                lang,
+                                                                &value.names,
+                                                            ),
                                                         )
                                                         .clicked()
                                                     {
@@ -238,7 +253,10 @@ impl LabApp {
                                                         if ui
                                                             .selectable_label(
                                                                 selected_value == special.id,
-                                                                &special.name,
+                                                                crate::i18n::localized_name(
+                                                                    lang,
+                                                                    &special.names,
+                                                                ),
                                                             )
                                                             .clicked()
                                                         {

@@ -64,7 +64,7 @@ impl Exporter for VocExporter {
 
             // Get category name
             let category_name =
-                find_category(meta, obj.category).map(|c| c.name.as_str()).unwrap_or("unknown");
+                find_category(meta, obj.category).map(|c| c.names.en.as_str()).unwrap_or("unknown");
 
             xml.push_str("  <object>\n");
             xml.push_str(&format!("    <name>{}</name>\n", category_name));
@@ -121,7 +121,7 @@ mod tests {
             roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![CatDef {
                 id: 0,
-                name: "person".to_string(),
+                names: crate::LocalizedNames::en("person"),
                 description: "Person".to_string(),
                 hotkey: "1".to_string(),
                 color: "#FF0000".to_string(),

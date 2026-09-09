@@ -3,6 +3,7 @@ pub mod dataset_export;
 pub mod image_folder_export;
 pub mod import;
 pub mod mask;
+pub mod meta_migrate;
 pub mod migrate;
 pub mod project;
 pub mod roi_inject;

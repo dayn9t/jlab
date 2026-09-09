@@ -15,6 +15,7 @@ impl LabApp {
                 self.state.i18n.t("canvas.open_project_hint")
             );
 
+            self.canvas.language = self.state.i18n.language();
             let canvas_response = self.canvas.show(
                 ui,
                 self.state.current_image.as_ref(),

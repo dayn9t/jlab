@@ -161,7 +161,7 @@ impl Exporter for CocoExporter {
             .iter()
             .map(|cat| CocoCategory {
                 id: cat.id,
-                name: cat.name.clone(),
+                name: cat.names.en.clone(),
                 supercategory: "object".to_string(),
             })
             .collect();
@@ -211,7 +211,7 @@ mod tests {
             roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![CatDef {
                 id: 0,
-                name: "person".to_string(),
+                names: crate::LocalizedNames::en("person"),
                 description: "Person".to_string(),
                 hotkey: "1".to_string(),
                 color: "#FF0000".to_string(),

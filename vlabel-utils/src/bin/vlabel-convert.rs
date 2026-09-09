@@ -8,6 +8,7 @@
 //!   vlabel-convert export --format image-folder --property <name> [--crop <margin>]
 //!       <project_dir> <out_dir>  (classification set: crops per property value)
 //!   vlabel-convert migrate-yaml [--global] <project_dir>
+//!   vlabel-convert localize-names <project_dir>  (meta.json5 name -> names: {en})
 //!   vlabel-convert verify-roundtrip [--iou-tolerance 0.01] [--report <file.jsonl>] <yolo_src>
 
 use anyhow::{Context, Result};
@@ -26,6 +27,7 @@ use vlabel_utils::import::{
     import_from_coco, import_from_labelme, import_from_voc, import_from_yolo,
     merge_imported_images, ImportedImage,
 };
+use vlabel_utils::meta_migrate;
 use vlabel_utils::migrate;
 use vlabel_utils::roi_inject;
 use vlabel_utils::Project;
@@ -90,6 +92,12 @@ enum Command {
         #[arg(long)]
         global: bool,
     },
+    /// One-shot meta.json5 migration: per-entity `name` -> `names: {en}`
+    /// (bilingual metadata names). Idempotent; comments are lost on rewrite.
+    LocalizeNames {
+        /// VLabel project directory (containing meta.json5)
+        project: PathBuf,
+    },
     /// Verify YOLO round-trip fidelity: import the source into a throwaway
     /// project, re-export it (no masking), and reconcile every box against
     /// the source. Exits non-zero on any mismatch.
@@ -134,6 +142,14 @@ fn run() -> Result<()> {
         }
         Command::Export { format, project, out, no_mask, symlink, property, crop } => {
             run_export(format, no_mask, symlink, property, crop, project, out)
+        }
+        Command::LocalizeNames { project } => {
+            let stats = meta_migrate::localize_names(&project)?;
+            println!(
+                "localized meta.json5: migrated={}, already-new-format={}",
+                stats.migrated, stats.already
+            );
+            Ok(())
         }
         Command::MigrateYaml { project, global } => {
             let global_path = if global {

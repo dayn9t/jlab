@@ -413,10 +413,12 @@ fn build_meta(
         .into_iter()
         .map(|id| CatDef {
             id,
-            name: names
-                .get(id as usize)
-                .and_then(|n| n.clone())
-                .unwrap_or_else(|| format!("class_{id}")),
+            names: vlabel_core::LocalizedNames::en(
+                names
+                    .get(id as usize)
+                    .and_then(|n| n.clone())
+                    .unwrap_or_else(|| format!("class_{id}")),
+            ),
             description: String::new(),
             hotkey: String::new(),
             color: "#FF0000".to_string(),

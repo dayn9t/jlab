@@ -41,6 +41,7 @@ impl Language {
 /// Internationalization manager
 pub struct I18n {
     translations: HashMap<String, serde_json::Value>,
+    language: Language,
 }
 
 impl I18n {
@@ -53,7 +54,12 @@ impl I18n {
 
         let translations: HashMap<String, serde_json::Value> = serde_json::from_str(json_content)?;
 
-        Ok(Self { translations })
+        Ok(Self { translations, language })
+    }
+
+    /// Current UI language (drives localized metadata name display)
+    pub fn language(&self) -> Language {
+        self.language
     }
 
     /// Translate a key to the current language
@@ -81,6 +87,17 @@ impl I18n {
     }
 }
 
+/// Metadata display name for the current UI language: zh-CN shows the
+/// Chinese name when present (falls back to the English canonical name,
+/// which also marks the entry as not yet localized); en-US always shows
+/// the English canonical name.
+pub fn localized_name(language: Language, names: &vlabel_core::LocalizedNames) -> &str {
+    match (language, &names.zh) {
+        (Language::ZhCN, Some(zh)) => zh,
+        _ => &names.en,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +112,29 @@ mod tests {
     fn test_language_name() {
         assert_eq!(Language::ZhCN.name(), "中文");
         assert_eq!(Language::EnUS.name(), "English");
+    }
+
+    #[test]
+    fn localized_name_zh_prefers_zh() {
+        let names = vlabel_core::LocalizedNames {
+            en: "trash".to_string(),
+            zh: Some("垃圾桶".to_string()),
+        };
+        assert_eq!(localized_name(Language::ZhCN, &names), "垃圾桶");
+    }
+
+    #[test]
+    fn localized_name_zh_falls_back_to_en() {
+        let names = vlabel_core::LocalizedNames::en("dry");
+        assert_eq!(localized_name(Language::ZhCN, &names), "dry");
+    }
+
+    #[test]
+    fn localized_name_en_always_uses_en() {
+        let names = vlabel_core::LocalizedNames {
+            en: "trash".to_string(),
+            zh: Some("垃圾桶".to_string()),
+        };
+        assert_eq!(localized_name(Language::EnUS, &names), "trash");
     }
 }

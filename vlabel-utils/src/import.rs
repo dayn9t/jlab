@@ -378,7 +378,7 @@ pub fn build_label(objects: Vec<Object>, user_agent: &str) -> Label {
 }
 
 fn find_category_id_by_name(meta: &LabelMeta, name: &str) -> Option<i32> {
-    meta.categories.iter().find(|cat| cat.name == name).map(|cat| cat.id)
+    meta.categories.iter().find(|cat| cat.names.en == name).map(|cat| cat.id)
 }
 
 fn parse_voc_size(xml: &str) -> Option<(f32, f32)> {
@@ -616,7 +616,7 @@ pub(crate) mod tests {
             roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![CatDef {
                 id: 0,
-                name: "person".to_string(),
+                names: vlabel_core::LocalizedNames::en("person"),
                 description: String::new(),
                 hotkey: "1".to_string(),
                 color: "#FF0000".to_string(),

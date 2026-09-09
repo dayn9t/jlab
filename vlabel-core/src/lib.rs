@@ -7,6 +7,8 @@ pub mod annotation;
 pub mod error;
 pub mod export;
 pub mod io;
+pub mod label;
+pub mod label_meta;
 
 // Re-export annotation types (with helper functions)
 pub use annotation::{
@@ -14,11 +16,12 @@ pub use annotation::{
     remove_object_property, set_object_property, touch,
 };
 
-// Re-export v3-types types used throughout vlabel-core.
-// v3-types 2026-06 重组：符号移入子模块（label / label_meta）；几何类型仍根 re-export。
-pub use v3_types::label::{Label, Object, PropertyEntry};
-pub use v3_types::label_meta::{
-    CatDef, CatProperty, LabelMeta, PropDef, RoiConfig, ShapeConfig, SpecialValue, ValueDef,
+// 标注数据/元数据类型（2026-09 自 v3-types 搬入本项目：标注类型归 vlabel，
+// 几何类型 Point/Polygon 仍留 v3-types）。
+pub use label::{Label, Object, PropertyEntry};
+pub use label_meta::{
+    CatDef, CatProperty, LabelMeta, LocalizedNames, PropDef, RoiConfig, ShapeConfig, SpecialValue,
+    ValueDef,
 };
 pub use v3_types::{Point, Polygon};
 

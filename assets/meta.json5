@@ -14,7 +14,7 @@
   categories: [
     {
       id: -1,
-      name: "pending",
+      names: { en: "pending", zh: "种类待定" },
       description: "种类待定",
       hotkey: "0",
       color: "#FFFFFF",
@@ -22,33 +22,33 @@
     },
     {
       id: 0,
-      name: "person",
+      names: { en: "person", zh: "人员" },
       description: "人员",
       hotkey: "1",
       color: "#FF0000",
       properties: [
         {
           id: 0,
-          name: "role",
+          names: { en: "role", zh: "人员角色" },
           type: "role",
         },
         {
           id: 1,
-          name: "gender",
+          names: { en: "gender", zh: "性别" },
           type: "gender",
         },
       ],
     },
     {
       id: 1,
-      name: "cat",
+      names: { en: "cat", zh: "猫" },
       description: "猫",
       hotkey: "2",
       color: "#FFFF00",
       properties: [
         {
           id: 0,
-          name: "gender",
+          names: { en: "gender", zh: "性别" },
           type: "gender",
         },
       ],
@@ -57,12 +57,12 @@
   property_types: [
     {
       id: 1,
-      name: "role",
+      names: { en: "role", zh: "人员角色" },
       description: "人员角色",
       values: [
         {
           id: 0,
-          name: "clerk",
+          names: { en: "clerk", zh: "职员" },
           description: "职员",
           hotkey: "1",
           color: "BROWN",
@@ -70,7 +70,7 @@
         },
         {
           id: 1,
-          name: "customer",
+          names: { en: "customer", zh: "客户" },
           description: "客户",
           hotkey: "2",
           color: "YELLOW",
@@ -80,12 +80,12 @@
     },
     {
       id: 2,
-      name: "gender",
+      names: { en: "gender", zh: "性别" },
       description: "性别",
       values: [
         {
           id: 0,
-          name: "male",
+          names: { en: "male", zh: "雄性" },
           description: "雄性",
           hotkey: "1",
           color: "BROWN",
@@ -93,7 +93,7 @@
         },
         {
           id: 1,
-          name: "female",
+          names: { en: "female", zh: "雌性" },
           description: "雌性",
           hotkey: "2",
           color: "YELLOW",
@@ -105,7 +105,7 @@
   property_special_values: [
     {
       id: -3,
-      name: "error",
+      names: { en: "error", zh: "检测器错误" },
       description: "检测器错误",
       hotkey: "r",
       color: "PINK",
@@ -113,7 +113,7 @@
     },
     {
       id: -2,
-      name: "excluded",
+      names: { en: "excluded", zh: "排除争议样本" },
       description: "排除争议样本",
       hotkey: "e",
       color: "PURPLE",
@@ -121,7 +121,7 @@
     },
     {
       id: -1,
-      name: "pending",
+      names: { en: "pending", zh: "待定" },
       description: "待定",
       hotkey: "q",
       color: "WHITE",

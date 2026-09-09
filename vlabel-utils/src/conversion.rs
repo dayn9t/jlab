@@ -86,7 +86,7 @@ pub fn export_yolo_classes_txt(meta: &LabelMeta, out_path: &Path) -> anyhow::Res
             ids
         );
     }
-    let content = categories.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join("\n");
+    let content = categories.iter().map(|c| c.names.en.as_str()).collect::<Vec<_>>().join("\n");
     fs::write(out_path, content)?;
     Ok(())
 }
@@ -205,7 +205,7 @@ mod tests {
             .enumerate()
             .map(|(i, &id)| CatDef {
                 id,
-                name: format!("c{i}"),
+                names: vlabel_core::LocalizedNames::en(format!("c{i}")),
                 description: String::new(),
                 hotkey: format!("{i}"),
                 color: "#FF0000".to_string(),
@@ -254,7 +254,7 @@ mod tests {
         let mut meta = test_meta(); // has id 0 "person"
         meta.categories.push(CatDef {
             id: 2,
-            name: "car".to_string(),
+            names: vlabel_core::LocalizedNames::en("car"),
             description: String::new(),
             hotkey: "2".to_string(),
             color: "#0000FF".to_string(),
@@ -262,7 +262,7 @@ mod tests {
         });
         meta.categories.push(CatDef {
             id: 1,
-            name: "dog".to_string(),
+            names: vlabel_core::LocalizedNames::en("dog"),
             description: String::new(),
             hotkey: "1".to_string(),
             color: "#FF0000".to_string(),
@@ -304,7 +304,7 @@ mod tests {
             roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![CatDef {
                 id: 0,
-                name: "person".to_string(),
+                names: vlabel_core::LocalizedNames::en("person"),
                 description: "Person".to_string(),
                 hotkey: "1".to_string(),
                 color: "#FF0000".to_string(),

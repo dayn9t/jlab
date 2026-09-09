@@ -246,7 +246,7 @@ mod tests {
             roi: RoiConfig { color: "#800080".to_string() },
             categories: vec![CatDef {
                 id: 0,
-                name: "person".to_string(),
+                names: vlabel_core::LocalizedNames::en("person"),
                 description: String::new(),
                 hotkey: "1".to_string(),
                 color: "#FF0000".to_string(),
