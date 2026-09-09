@@ -310,7 +310,7 @@ pub fn merge_imported_images(
 }
 
 /// Extract the file stem (name without extension); annotation files are keyed by stem.
-fn image_stem(file_name: &str) -> &str {
+pub(crate) fn image_stem(file_name: &str) -> &str {
     Path::new(file_name).file_stem().and_then(|s| s.to_str()).unwrap_or(file_name)
 }
 
@@ -658,6 +658,21 @@ pub(crate) mod tests {
     fn import_from_yolo_without_labels_gives_empty_annotation() {
         let root = temp_root("yolo-empty");
         fs::write(root.join("images/b.png"), b"fake").unwrap();
+
+        let imported = import_from_yolo(&root, &test_meta()).unwrap();
+
+        assert_eq!(imported.len(), 1);
+        assert!(imported[0].annotation.objects.is_empty());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn import_from_yolo_blank_label_file_gives_empty_annotation() {
+        // Negative-sample frames: a present-but-blank label file must import
+        // as a vlabel with zero objects, not be skipped.
+        let root = temp_root("yolo-blank");
+        fs::write(root.join("images/c.png"), b"fake").unwrap();
+        fs::write(root.join("labels/c.txt"), "  \n\n").unwrap();
 
         let imported = import_from_yolo(&root, &test_meta()).unwrap();
 
