@@ -8,8 +8,10 @@
 //! rewrites the file as dynamic JSON without going through `LabelMeta`.
 //!
 //! Top-level `meta.name` (the project name, not an enumeration entity)
-//! is left untouched. Comments in the hand-edited file are lost on
-//! rewrite — same as any GUI `save_meta`.
+//! is left untouched. Output is written through `save_meta`, so the
+//! file always comes back in struct-declaration key order, pretty
+//! JSON5 — identical to what the GUI writes. Comments in the
+//! hand-edited file are lost on rewrite — same as any GUI `save_meta`.
 
 use anyhow::{bail, Context};
 use serde_json::{Map, Value};
@@ -69,12 +71,15 @@ pub fn localize_names(project_dir: &Path) -> anyhow::Result<LocalizeStats> {
         }
     }
 
-    // json5 crate serializes compact (same wire format as `save_meta`).
-    let out = json5::to_string(&root)?;
-    let tmp = meta_path.with_extension("json5.tmp");
-    fs::write(&tmp, out.as_bytes()).with_context(|| format!("failed to write {:?}", tmp))?;
-    fs::rename(&tmp, &meta_path)
-        .with_context(|| format!("failed to move {:?} over {:?}", tmp, meta_path))?;
+    // Typed round-trip: validate the migrated value parses as LabelMeta
+    // *before* anything is written, then write via `save_meta` so the file
+    // comes out in struct-declaration key order with the same pretty-JSON5
+    // formatting the GUI produces (going through serde_json::Value directly
+    // would alphabetize every key - BTreeMap - which is how this tool used
+    // to scramble hand-written metas).
+    let meta: vlabel_core::LabelMeta = serde_json::from_value(root)
+        .with_context(|| format!("{:?} does not parse as LabelMeta after migration", meta_path))?;
+    vlabel_core::io::save_meta(&meta_path, &meta)?;
     Ok(stats)
 }
 
@@ -163,6 +168,37 @@ mod tests {
         assert_eq!(meta.property_types[0].values[0].names.en, "dry");
         assert_eq!(meta.property_special_values[0].names.en, "occluded");
         assert_eq!(meta.categories[0].names.zh, None);
+
+        // Output must be in struct-declaration order (not alphabetical):
+        // top level id..categories..property_types, entity id..names..description.
+        let out = fs::read_to_string(dir.join("meta.json5")).unwrap();
+        let top = [
+            "id:",
+            "name:",
+            "description:",
+            "shape:",
+            "roi:",
+            "categories:",
+            "property_types:",
+            "property_special_values:",
+        ];
+        let mut last = 0usize;
+        for key in top {
+            let at = out.find(key).unwrap_or_else(|| panic!("{key} missing in output:\n{out}"));
+            assert!(at > last, "{key} out of declaration order in:\n{out}");
+            last = at;
+        }
+        let entity = ["id:", "names:", "description:", "hotkey:", "color:"];
+        let cat_at = out.find("categories:").unwrap();
+        let scope = &out[cat_at..];
+        let mut last = 0usize;
+        for key in entity {
+            let at = scope
+                .find(key)
+                .unwrap_or_else(|| panic!("{key} missing in first category:\n{scope}"));
+            assert!(at > last, "{key} out of declaration order in first category:\n{scope}");
+            last = at;
+        }
         let _ = fs::remove_dir_all(&dir);
     }
 
